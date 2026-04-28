@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.pipeline import (
@@ -12,6 +13,19 @@ from app.pipeline import (
 from app.schemas import RawInput
 
 app = FastAPI(title="Career DNA API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://career-dna-production.up.railway.app",
+        "*",
+    ],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/")

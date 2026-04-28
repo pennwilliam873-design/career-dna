@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
 
+const API_URL = 'https://career-dna-production.up.railway.app/generate-dna'
+
 // ── Sample profile ────────────────────────────────────────────────────────────
 const SAMPLE = {
   cv_text: `Managing Director – Infrastructure & Energy, Carlyle Advisory Partners (2019–2024)
@@ -283,7 +285,7 @@ export default function App() {
     setResult(null)
     const payload = buildPayload(form)
     try {
-      const { data } = await axios.post('/generate-dna', payload)
+      const { data } = await axios.post(API_URL, payload)
       setResult(data)
       setTimeout(() => summaryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120)
     } catch (err) {
@@ -323,7 +325,7 @@ export default function App() {
     setResult(null)
     const payload = buildPayload(SAMPLE)
     try {
-      const { data } = await axios.post('/generate-dna', payload)
+      const { data } = await axios.post(API_URL, payload)
       setResult(data)
       setTimeout(() => summaryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120)
     } catch (err) {
