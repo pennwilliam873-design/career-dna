@@ -73,7 +73,8 @@ _BULLET_LINE  = re.compile(r"^\s*[-•*▪◦]\s+(.+)$", re.MULTILINE)
 _BLANK_LINE   = re.compile(r"\n\s*\n")
 
 # Matches lines that are contact / personal-header content — never a valid org or role title.
-# Used to filter out emails, phones, URLs, and "label: value" contact lines.
+# Covers: email, phone, URL, social handles, and location/metadata labels such as
+# "based: Sydney", "location: Melbourne", "address: ...", etc.
 _CONTACT_LINE_RE = re.compile(
     r"""
     (?:
@@ -84,7 +85,11 @@ _CONTACT_LINE_RE = re.compile(
         | www\.[a-zA-Z0-9]                                    # www URL
         | linkedin\.com                                        # LinkedIn
         | github\.com                                          # GitHub
-        | (?:email|e-mail|contact|skype|twitter)\s*:          # other contact labels
+        | (?:email|e-mail|contact|skype|twitter)\s*:          # contact labels
+        | (?:based(?:\s+in)?|location|address|city|suburb     # location/metadata labels
+           |residence|nationality|languages?|available
+           |availability|notice|clearance|visa
+           |right\s+to\s+work|work\s+rights)\s*:
     )
     """,
     re.I | re.VERBOSE,
@@ -329,10 +334,12 @@ def _extract_org_from_next_lines(lines: list[str], title_idx: int) -> str:
         # Stop if this looks like another role header (contains a year range)
         if _YEAR_RANGE.search(stripped):
             break
-        # "Org Name | City" — take what is before the first pipe
+        # "Org Name | City" — take what is before the first pipe.
+        # Reject if the candidate looks like a contact/location metadata line
+        # (e.g. "based: Sydney | HQ: Melbourne").
         if "|" in stripped:
             candidate = stripped.split("|")[0].strip()
-            if 2 <= len(candidate) <= 80:
+            if 2 <= len(candidate) <= 80 and not _CONTACT_LINE_RE.search(candidate):
                 return candidate[:120]
         # Not the expected "Org | City" pattern on this line — stop looking
         break

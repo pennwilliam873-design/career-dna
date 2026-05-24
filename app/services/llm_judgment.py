@@ -200,18 +200,23 @@ _NAMED_VENTURE_RE = re.compile(
 _PIPE_LEADER_RE = re.compile(r"^(.+?)\s*\|", re.MULTILINE)
 
 # Contact / personal-header lines must never be treated as organisation names.
-# Matches: email addresses, phone numbers, URLs, and "label: value" contact pairs.
+# Matches: email addresses, phone numbers, URLs, contact labels, and location/metadata
+# labels such as "based: Sydney", "location: Melbourne", "address: ...", etc.
 _CONTACT_ORG_RE = re.compile(
     r"""
     (?:
         [a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}   # email
         | (?:phone|tel|mobile|cell|fax|email|e-mail
-           |linkedin|github|twitter|skype|contact)\s*:        # contact label
+           |linkedin|github|twitter|skype|contact)\s*:        # contact labels
         | \+\d[\d\s\-().]{5,}                                 # international phone
         | https?://                                            # URL
         | www\.[a-zA-Z0-9]                                    # www
         | linkedin\.com                                        # LinkedIn
         | github\.com                                          # GitHub
+        | (?:based(?:\s+in)?|location|address|city|suburb     # location/metadata labels
+           |residence|nationality|languages?|available
+           |availability|notice|clearance|visa
+           |right\s+to\s+work|work\s+rights)\s*:
     )
     """,
     re.I | re.VERBOSE,
