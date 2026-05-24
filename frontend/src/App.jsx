@@ -29,6 +29,9 @@ Delivered operational transformation programme reducing OpEx by £45M across reg
   target_sector: `Infrastructure & Energy`,
   target_seniority: `Partner`,
   transition_goal: `Move from strategic advisory into a PE operating partner seat focused on energy transition assets within 12 months`,
+  market_context_notes: `Actively targeting PE operating partner roles in London. Available for immediate start. Board-level network across European infrastructure and energy sector.`,
+  location: `London, UK`,
+  timeframe: `12 months`,
 }
 
 const INITIAL = {
@@ -36,6 +39,7 @@ const INITIAL = {
   conflict_marker: '', never_again: '', industry_curiosity: '',
   lifestyle_preferences: '', salary_floor: '', upskilling_willingness: false,
   target_role: '', target_sector: '', target_seniority: '', transition_goal: '',
+  market_context_notes: '', location: '', timeframe: '',
 }
 
 // ── Loading stage messages ────────────────────────────────────────────────────
@@ -43,7 +47,7 @@ const LOAD_MSGS = [
   'Analysing profile…',
   'Comparing against target role…',
   'Identifying critical gaps…',
-  'Building transition plan…',
+  'Generating executive intelligence…',
 ]
 
 // ── Verdict display maps ──────────────────────────────────────────────────────
@@ -70,11 +74,11 @@ const GAP_LABEL = {
 // ── Report rendering ─────────────────────────────────────────────────────────
 
 const SCAN_MARKERS = {
-  'DECISION':                       '◆',
-  'CRITICAL GAPS':                  '▸',
-  'UPGRADE STRATEGY':               '→',
-  '90-DAY PLAN':                    '◯',
-  'WHAT THE HIRING PANEL WILL ASK': '?',
+  'PATHWAY DECISION CONTEXT':   '◆',
+  'CAREER RISKS AND BLIND SPOTS': '▸',
+  'RECOMMENDED PATHWAY':        '→',
+  '30/60/90-DAY ACTION PLAN':   '◯',
+  'EVIDENCE APPENDIX':          '?',
 }
 
 // Sharp, blunt opening line per verdict
@@ -87,7 +91,6 @@ const DECISION_HOOK = {
 
 // Verbose phrase → sharp replacement
 const COMPRESSIONS = [
-  // Hedge starters
   [/\byou should consider\b/gi,          ''],
   [/\bit would be beneficial to\b/gi,    ''],
   [/\bconsider taking steps to\b/gi,     ''],
@@ -99,7 +102,6 @@ const COMPRESSIONS = [
   [/\btake the time to\b/gi,             ''],
   [/\byou could consider\b/gi,           'consider'],
   [/\byou may want to\b/gi,              ''],
-  // Filler connectives
   [/\bin order to\b/gi,                  'to'],
   [/\bso as to\b/gi,                     'to'],
   [/\bwith a view to\b/gi,               'to'],
@@ -112,7 +114,6 @@ const COMPRESSIONS = [
   [/\bin this context\b/gi,              ''],
   [/\bas mentioned\b/gi,                 ''],
   [/\bon an ongoing basis\b/gi,          'ongoing'],
-  // Bloated constructions
   [/\bdue to the fact that\b/gi,         'because'],
   [/\bthe fact that\b/gi,                'that'],
   [/\bhas the potential to\b/gi,         'can'],
@@ -131,12 +132,10 @@ function compressText(text) {
   for (const [pat, rep] of COMPRESSIONS) {
     t = t.replace(pat, rep)
   }
-  // Collapse extra spaces left by removals, re-capitalise start
   t = t.replace(/\s{2,}/g, ' ').trim()
   return t ? t[0].toUpperCase() + t.slice(1) : t
 }
 
-// Auto-bold time ranges not already wrapped in **
 function autoBold(text) {
   return text.replace(/(?<!\*)(\d+[–\-]\d+\s+days)(?!\*)/g, '**$1**')
 }
@@ -149,19 +148,27 @@ function renderInline(text) {
   )
 }
 
-// Split the flat text into [{heading, lines}] pairs
+// Split the flat text into [{heading, headingLevel, body}] pairs
 function parseSections(text) {
   const raw = text.split('\n')
   const sections = []
   let heading = null
+  let headingLevel = 1
   let body = []
   let i = 0
   while (i < raw.length) {
     const line = raw[i]
     const next = raw[i + 1] ?? ''
     if (line.trim() && /^=+$/.test(next.trim())) {
-      sections.push({ heading, body })
+      sections.push({ heading, headingLevel, body })
       heading = line.trim()
+      headingLevel = 1
+      body = []
+      i += 2
+    } else if (line.trim() && /^─+$/.test(next.trim())) {
+      sections.push({ heading, headingLevel, body })
+      heading = line.trim()
+      headingLevel = 2
       body = []
       i += 2
     } else {
@@ -169,13 +176,16 @@ function parseSections(text) {
       i++
     }
   }
-  sections.push({ heading, body })
+  sections.push({ heading, headingLevel, body })
   return sections.filter(s => s.heading || s.body.some(l => l.trim()))
 }
 
 function renderLines(lines) {
   return lines.map((line, i) => {
     if (!line.trim()) return <div key={i} className="rpt-gap" />
+
+    // Pure Unicode box-drawing divider (sub-section separator)
+    if (/^─+$/.test(line.trim())) return <div key={i} className="rpt-divider" />
 
     // Bullet: "  - text"
     if (/^  - /.test(line)) {
@@ -196,7 +206,7 @@ function renderLines(lines) {
     if (/^[A-Z][A-Za-z ]{0,18}:$/.test(line.trim())) return (
       <div key={i} className="rpt-sublabel">{line.trim()}</div>
     )
-    // Key-value line: "Verdict:         **Borderline**"  (alignment-sensitive — no compress)
+    // Key-value line: "Verdict:         **Borderline**"
     if (/^[A-Z][A-Za-z ]{0,25}:\s{2,}/.test(line)) return (
       <div key={i} className="rpt-kv">{renderInline(autoBold(line))}</div>
     )
@@ -207,21 +217,21 @@ function renderLines(lines) {
 }
 
 function renderSection(section, si, meta = {}) {
-  const isDecision = section.heading === 'DECISION'
-  const marker     = SCAN_MARKERS[section.heading]
-  const hookLine   = isDecision ? DECISION_HOOK[meta.verdict] : null
-  const gapLabel   = isDecision && meta.blockingGapType ? GAP_LABEL[meta.blockingGapType] : null
+  const isDecision  = section.heading === 'PATHWAY DECISION CONTEXT'
+  const marker      = SCAN_MARKERS[section.heading]
+  const hookLine    = isDecision ? DECISION_HOOK[meta.verdict] : null
+  const gapLabel    = isDecision && meta.blockingGapType ? GAP_LABEL[meta.blockingGapType] : null
+  const headingCls  = section.headingLevel === 2 ? 'rpt-subheading' : 'rpt-heading'
 
   return (
     <div key={si} className={`rpt-section${isDecision ? ' rpt-section--decision' : ''}`}>
       {section.heading && (
-        <div className={`rpt-heading${isDecision ? ' rpt-heading--decision' : ''}`}>
+        <div className={`${headingCls}${isDecision ? ' rpt-heading--decision' : ''}`}>
           {marker && <span className="rpt-marker">{marker}</span>}
           {section.heading}
         </div>
       )}
 
-      {/* Sharp opening line + primary constraint, injected at top of DECISION */}
       {hookLine && <div className="rpt-hook">{hookLine}</div>}
       {gapLabel && (
         <div className="rpt-constraint">
@@ -240,11 +250,33 @@ function renderReport(text, meta = {}) {
   return parseSections(text).map((section, si) => renderSection(section, si, meta))
 }
 
-// Pull the first sentence of the executive summary as the key insight
-function extractKeyInsight(summary) {
-  if (!summary) return null
-  const s = summary.split(/(?<=\.)\s+/)[0].trim()
+// Extract key insight from LLM executive thesis
+function extractKeyInsight(llmJudgment) {
+  const thesis = llmJudgment?.executive_thesis
+  if (!thesis) return null
+  const s = thesis.split(/(?<=\.)\s+/)[0].trim()
   return s.endsWith('.') ? s : s + '.'
+}
+
+// Parse verdict, target_role, time_to_upgrade from formatted_report text
+function extractFromReport(text) {
+  if (!text) return {}
+  const verdictMatch = text.match(/^Verdict:\s+\*\*(.+?)\*\*/m)
+  const targetMatch  = text.match(/^Target Role:\s+(.+)/m)
+  const timeMatch    = text.match(/^Time to Upgrade:\s+(.+)/m)
+  const verdictRaw   = verdictMatch?.[1]?.trim()
+  const verdictKeyMap = {
+    'Strong Yes': 'strong_yes',
+    'Credible':   'credible',
+    'Borderline': 'borderline',
+    'Lean No':    'lean_no',
+    'No-Fit':     'lean_no',
+  }
+  return {
+    verdict:         verdictKeyMap[verdictRaw] ?? null,
+    target_role:     targetMatch?.[1]?.trim() ?? null,
+    time_to_upgrade: timeMatch?.[1]?.trim().replace(/\.$/, '') ?? null,
+  }
 }
 
 function parseList(str) {
@@ -260,6 +292,7 @@ export default function App() {
   const [error, setError]       = useState('')
   const [copied, setCopied]     = useState(false)
   const summaryRef              = useRef(null)
+  const fileInputRef            = useRef(null)
 
   useEffect(() => {
     if (!loading) return
@@ -271,6 +304,15 @@ export default function App() {
   function handleChange(e) {
     const { name, value, type, checked } = e.target
     setForm(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }))
+  }
+
+  function handleFileUpload(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = evt => setForm(prev => ({ ...prev, cv_text: evt.target.result }))
+    reader.readAsText(file)
+    e.target.value = ''
   }
 
   async function handleSubmit(e) {
@@ -311,10 +353,14 @@ export default function App() {
       lifestyle_preferences: parseList(data.lifestyle_preferences),
       salary_floor:          parseFloat(data.salary_floor) || 0,
       upskilling_willingness: data.upskilling_willingness,
-      ...(data.target_role      && { target_role:      data.target_role }),
-      ...(data.target_sector    && { target_sector:    data.target_sector }),
-      ...(data.target_seniority && { target_seniority: data.target_seniority }),
-      ...(data.transition_goal  && { transition_goal:  data.transition_goal }),
+      llm_judgment_enabled:  true,
+      ...(data.target_role          && { target_role:          data.target_role }),
+      ...(data.target_sector        && { target_sector:        data.target_sector }),
+      ...(data.target_seniority     && { target_seniority:     data.target_seniority }),
+      ...(data.transition_goal      && { transition_goal:      data.transition_goal }),
+      ...(data.market_context_notes && { market_context_notes: data.market_context_notes }),
+      ...(data.location             && { location:             data.location }),
+      ...(data.timeframe            && { timeframe:            data.timeframe }),
     }
   }
 
@@ -357,11 +403,12 @@ export default function App() {
     URL.revokeObjectURL(url)
   }
 
-  const er         = result?.executive_report
-  const fitPct     = result?.pivot_delta != null
+  const parsedReport  = extractFromReport(result?.formatted_report)
+  const fitPct        = result?.pivot_delta != null
     ? Math.round(result.pivot_delta.overall_fit_score * 100)
     : null
-  const keyInsight = extractKeyInsight(er?.executive_summary)
+  const keyInsight    = extractKeyInsight(result?.llm_judgment)
+  const blockingGap   = result?.executive_report?.blocking_gap_type ?? null
 
   return (
     <div className="container">
@@ -386,53 +433,82 @@ export default function App() {
         <section>
           <h2>CV &amp; Background</h2>
           <label>
-            CV Text <Req />
+            CV / Professional History <Req />
+            <Hint>Paste your full CV, or upload a .txt file below</Hint>
             <textarea name="cv_text" value={form.cv_text} onChange={handleChange}
               rows={10} placeholder="Paste your full CV here…" required />
           </label>
+          <div className="upload-row">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".txt,text/plain"
+              style={{ display: 'none' }}
+              onChange={handleFileUpload}
+            />
+            <button
+              type="button"
+              className="btn-upload"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              Upload .txt CV
+            </button>
+            <span className="upload-hint">Replaces pasted text above</span>
+          </div>
           <label>
-            Top Achievements <Req />
-            <Hint>One per line, max 3</Hint>
+            3 Standout Achievements <Req />
+            <Hint>One per line, max 3 — lead with outcomes and numbers</Hint>
             <textarea name="top_achievements" value={form.top_achievements} onChange={handleChange}
               rows={4} placeholder={"Led transformation programme saving £30M…\nScaled revenue from £50M to £200M…"} required />
           </label>
           <label>
             Zone of Genius <Req />
+            <Hint>The intersection of what you are exceptional at and what energises you</Hint>
             <textarea name="zone_of_genius" value={form.zone_of_genius} onChange={handleChange}
               rows={3} placeholder="Your area of exceptional ability…" required />
           </label>
         </section>
 
         <section>
-          <h2>Work Preferences</h2>
+          <h2>Career Preferences</h2>
           <label>
-            Conflict Marker <Req />
+            How You Operate Under Pressure <Req />
+            <Hint>How you handle conflict, disagreement, or high-stakes decisions</Hint>
             <textarea name="conflict_marker" value={form.conflict_marker} onChange={handleChange}
-              rows={2} placeholder="How you typically behave under conflict…" required />
+              rows={2} placeholder="I name the issue directly, with data…" required />
           </label>
           <label>
-            Never Again <Req />
+            What You Will Not Accept <Req />
+            <Hint>Work situations, cultures, or dynamics you refuse to repeat</Hint>
             <textarea name="never_again" value={form.never_again} onChange={handleChange}
-              rows={2} placeholder="Work situations you refuse to repeat…" required />
+              rows={2} placeholder="Consensus-driven organisations where decisions stall…" required />
           </label>
           <label>
-            Industry Curiosity
+            Industries of Interest
             <Hint>Comma-separated</Hint>
             <input type="text" name="industry_curiosity" value={form.industry_curiosity}
               onChange={handleChange} placeholder="Private equity, technology, healthcare" />
           </label>
           <label>
-            Lifestyle Preferences
+            Work Style &amp; Lifestyle Priorities
             <Hint>Comma-separated</Hint>
             <input type="text" name="lifestyle_preferences" value={form.lifestyle_preferences}
-              onChange={handleChange} placeholder="Remote work, autonomy, travel" />
+              onChange={handleChange} placeholder="Autonomy, board-level access, international" />
           </label>
           <div className="row">
             <label>
-              Salary Floor (£) <Req />
+              Minimum Annual Salary
+              <Hint>Number only — any currency</Hint>
               <input type="number" name="salary_floor" value={form.salary_floor}
-                onChange={handleChange} placeholder="150000" min="0" required />
+                onChange={handleChange} placeholder="150000" min="0" />
             </label>
+            <label>
+              Location
+              <input type="text" name="location" value={form.location}
+                onChange={handleChange} placeholder="London, UK" />
+            </label>
+          </div>
+          <div className="row">
             <label className="checkbox-label">
               <input type="checkbox" name="upskilling_willingness"
                 checked={form.upskilling_willingness} onChange={handleChange} />
@@ -446,7 +522,7 @@ export default function App() {
           <label>
             Target Role
             <input type="text" name="target_role" value={form.target_role}
-              onChange={handleChange} placeholder="CEO, Private Equity Operating Partner…" />
+              onChange={handleChange} placeholder="CEO, PE Operating Partner, Board Director…" />
           </label>
           <div className="row">
             <label>
@@ -457,13 +533,26 @@ export default function App() {
             <label>
               Target Seniority
               <input type="text" name="target_seniority" value={form.target_seniority}
-                onChange={handleChange} placeholder="C-suite, Director…" />
+                onChange={handleChange} placeholder="C-suite, Partner, Director…" />
+            </label>
+          </div>
+          <div className="row">
+            <label>
+              Transition Goal
+              <textarea name="transition_goal" value={form.transition_goal} onChange={handleChange}
+                rows={2} placeholder="Become a PE Operating Partner within 18 months…" />
+            </label>
+            <label>
+              Target Timeframe
+              <input type="text" name="timeframe" value={form.timeframe}
+                onChange={handleChange} placeholder="12 months, Q3 2026…" />
             </label>
           </div>
           <label>
-            Transition Goal
-            <textarea name="transition_goal" value={form.transition_goal} onChange={handleChange}
-              rows={2} placeholder="Become a PE Operating Partner within 18 months…" />
+            Market Context Notes
+            <Hint>Optional — paste job posting trends, salary benchmarks, or recent market intel</Hint>
+            <textarea name="market_context_notes" value={form.market_context_notes} onChange={handleChange}
+              rows={3} placeholder="Market context you want the analysis to factor in…" />
           </label>
         </section>
 
@@ -493,8 +582,11 @@ export default function App() {
       )}
 
       {/* ── Summary card ──────────────────────────────────── */}
-      {er && (
-        <div className={`summary-card summary-card--${er.verdict}`} ref={summaryRef}>
+      {result?.formatted_report && (parsedReport.verdict || fitPct !== null) && (
+        <div
+          className={`summary-card summary-card--${parsedReport.verdict ?? 'default'}`}
+          ref={summaryRef}
+        >
           <p className="summary-eyebrow">Analysis Complete</p>
           <div className="summary-grid">
             {fitPct !== null && (
@@ -503,29 +595,31 @@ export default function App() {
                 <span className="metric-score">{fitPct}%</span>
               </div>
             )}
-            <div className="metric">
-              <span className="metric-label">Verdict</span>
-              <span className={`verdict-pill ${VERDICT_CLS[er.verdict] ?? ''}`}>
-                {VERDICT_LABEL[er.verdict] ?? er.verdict}
-              </span>
-            </div>
-            {er.target_role && (
+            {parsedReport.verdict && (
+              <div className="metric">
+                <span className="metric-label">Verdict</span>
+                <span className={`verdict-pill ${VERDICT_CLS[parsedReport.verdict] ?? ''}`}>
+                  {VERDICT_LABEL[parsedReport.verdict] ?? parsedReport.verdict}
+                </span>
+              </div>
+            )}
+            {parsedReport.target_role && (
               <div className="metric">
                 <span className="metric-label">Target Role</span>
-                <span className="metric-value">{er.target_role}</span>
+                <span className="metric-value">{parsedReport.target_role}</span>
               </div>
             )}
-            {er.time_to_upgrade && (
+            {parsedReport.time_to_upgrade && (
               <div className="metric">
                 <span className="metric-label">Time to Upgrade</span>
-                <span className="metric-value">{er.time_to_upgrade.split('.')[0]}</span>
+                <span className="metric-value">{parsedReport.time_to_upgrade}</span>
               </div>
             )}
-            {er.blocking_gap_type && (
+            {blockingGap && (
               <div className="metric">
                 <span className="metric-label">Primary Blocker</span>
                 <span className="metric-value metric-warn">
-                  {GAP_LABEL[er.blocking_gap_type] ?? er.blocking_gap_type}
+                  {GAP_LABEL[blockingGap] ?? blockingGap}
                 </span>
               </div>
             )}
@@ -557,8 +651,8 @@ export default function App() {
           </div>
           <div className="report">
             {renderReport(result.formatted_report, {
-              verdict:         er?.verdict,
-              blockingGapType: er?.blocking_gap_type,
+              verdict:         parsedReport.verdict,
+              blockingGapType: blockingGap,
             })}
           </div>
         </section>
