@@ -1,4 +1,7 @@
-from fastapi import FastAPI
+import os
+from typing import Optional
+
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -13,6 +16,19 @@ from app.pipeline import (
 from app.schemas import RawInput
 
 app = FastAPI(title="Career DNA API")
+
+
+def verify_trial_key(x_trial_key: Optional[str] = Header(default=None)) -> None:
+    """
+    Validates the X-Trial-Key header against the TRIAL_API_KEY env var.
+    If TRIAL_API_KEY is not set (local dev), all requests are allowed.
+    If it is set (production), a missing or wrong key returns 401.
+    """
+    trial_key = os.getenv("TRIAL_API_KEY")
+    if not trial_key:
+        return  # dev mode — no key configured, open access
+    if x_trial_key != trial_key:
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
 app.add_middleware(
     CORSMiddleware,
@@ -38,7 +54,7 @@ def health():
     return {"status": "ok"}
 
 
-@app.post("/generate-dna", response_model=None)
+@app.post("/generate-dna", response_model=None, dependencies=[Depends(verify_trial_key)])
 def generate_dna(input_data: RawInput):
     try:
         output: PipelineOutput = generate_career_dna_report(input_data)

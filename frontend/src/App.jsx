@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
 
-const API_URL = 'https://career-dna-production.up.railway.app/generate-dna'
+const API_URL = '/api/generate-dna'
 
 // ── Sample profile ────────────────────────────────────────────────────────────
 const SAMPLE = {
