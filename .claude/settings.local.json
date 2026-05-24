@@ -1,7 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "Bash(pkill -f \"uvicorn app.main\")",
+      "Bash(python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000)",
+      "Bash(curl -s http://localhost:8000/health)",
+      "Bash(python3 -c \"import anthropic; print\\(anthropic.__version__\\)\")",
+      "Bash(pip install *)",
+      "Bash(python3 -c \"import anthropic; print\\('anthropic', anthropic.__version__, 'installed'\\)\")",
+      "Bash(pip3 install *)"
     ]
   }
 }

@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from app.schemas import (
     AdaptiveDNA, AspirationalDNA, CareerDNAProfile,
-    ExtractedRole, FunctionalDNA, KeyTension, PivotDirection,
+    ExtractedRole, FunctionalDNA, KeyTension, PathwayReadiness, PivotDirection,
     ProcessedProfile, RawInput, RiskFlagDetail, WeightedSignal,
 )
 from app.services.cv_parser import parse_cv
@@ -23,13 +23,22 @@ from app.services.pattern_detection import (
 )
 from app.services.prioritisation import PrioritisedInsightSet, build_prioritised_set
 from app.services.narrative import NarrativeReport, assemble_report
-from app.services.target_profiles import build_target_profile
+from app.services.target_profiles import build_target_profile, parse_compound_target
 from app.services.delta_engine import compute_pivot_delta
 from app.services.narrative_engine import PivotNarrative, build_pivot_narrative
 from app.services.stakeholder_simulator import StakeholderFeedback, simulate_stakeholder_feedback
 from app.services.decision_engine import DecisionUpgradePlan, build_decision_upgrade_plan
-from app.services.report_engine import ExecutiveTransitionReport, assemble_executive_report, format_executive_report
-from app.schemas import TargetRoleProfile, PivotDeltaReport
+from app.services.report_engine import (
+    ExecutiveTransitionReport,
+    assemble_executive_report,
+    format_executive_report,
+    format_career_dna_report,
+)
+from app.services.trajectory_engine import build_career_trajectory
+from app.services.heuristic_scoring import build_heuristic_scores
+from app.services.llm_judgment import build_llm_judgment
+from app.schemas import CareerTrajectory, HeuristicScoreSet, LLMReportIntelligence, PathwayReadiness, TargetRoleProfile, PivotDeltaReport
+LLMJudgment = LLMReportIntelligence  # keep local alias for any other references
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +99,12 @@ class PipelineOutput(BaseModel):
     decision_plan: Optional[DecisionUpgradePlan] = None
     executive_report: Optional[ExecutiveTransitionReport] = None
     formatted_report: Optional[str] = None
+    # New: enriched intelligence outputs
+    heuristic_scores: Optional[Any] = None      # HeuristicScoreSet
+    career_trajectory: Optional[Any] = None     # CareerTrajectory
+    enriched_roles: Optional[List[Any]] = None  # List[ExtractedRole] (richly parsed)
+    compound_pathways: Optional[List[PathwayReadiness]] = None
+    llm_judgment: Optional[LLMReportIntelligence] = None
 
 
 # ---------------------------------------------------------------------------
@@ -111,19 +126,7 @@ def validate_input(raw: RawInput) -> None:
             f"CV is too short ({word_count} words). "
             f"Minimum required: {MIN_CV_WORD_COUNT} words."
         )
-
-    if not raw.zone_of_genius.strip():
-        raise InputValidationError("zone_of_genius must not be empty.")
-
-    if not raw.never_again.strip():
-        raise InputValidationError("never_again must not be empty.")
-
-    if not raw.top_achievements:
-        raise InputValidationError("At least one achievement is required.")
-
-    for i, ach in enumerate(raw.top_achievements):
-        if not ach.strip():
-            raise InputValidationError(f"Achievement at index {i} is empty.")
+    # All other fields are now optional — emit warnings but do not block
 
 
 # ---------------------------------------------------------------------------
@@ -286,6 +289,11 @@ def build_pipeline_output(
     decision_plan: Optional[DecisionUpgradePlan] = None,
     executive_report: Optional[ExecutiveTransitionReport] = None,
     formatted_report: Optional[str] = None,
+    heuristic_scores: Optional[Any] = None,
+    career_trajectory: Optional[Any] = None,
+    enriched_roles: Optional[List[Any]] = None,
+    compound_pathways: Optional[List[PathwayReadiness]] = None,
+    llm_judgment: Optional[LLMReportIntelligence] = None,
 ) -> PipelineOutput:
     summary = build_signal_summary(processed, suppressed_count)
 
@@ -316,6 +324,11 @@ def build_pipeline_output(
         decision_plan=decision_plan,
         executive_report=executive_report,
         formatted_report=formatted_report,
+        heuristic_scores=heuristic_scores,
+        career_trajectory=career_trajectory,
+        enriched_roles=enriched_roles,
+        compound_pathways=compound_pathways,
+        llm_judgment=llm_judgment,
     )
 
 
@@ -334,6 +347,82 @@ def serialise_pipeline_error(error: PipelineError) -> Dict[str, Any]:
         "message": error.message,
         "recoverable": error.recoverable,
     }
+
+
+# ---------------------------------------------------------------------------
+# Compound target pathway helpers
+# ---------------------------------------------------------------------------
+
+def _pathway_interpretation(pathway_name: str, fit_score: float, band: str, key_gaps: List[str]) -> str:
+    if band == "strong":
+        return (
+            f"Very strong match — {pathway_name} is a primary target. "
+            "Profile demonstrates the required vocabulary, credibility, and track record."
+        )
+    elif band == "credible":
+        if key_gaps:
+            return (
+                f"Credible pathway — core signals are present. "
+                f"Closing the {key_gaps[0].lower()} will make this approach compelling."
+            )
+        return f"Credible pathway — signals align well. Sharpen the narrative to make the case explicit."
+    elif band == "partial":
+        if key_gaps:
+            return (
+                f"Partial readiness — the foundation is there but {key_gaps[0].lower()} "
+                "requires targeted development before approaching the market."
+            )
+        return "Partial readiness — experience is relevant but framing and vocabulary development needed."
+    else:
+        return (
+            f"Early-stage readiness — significant repositioning required "
+            f"before a credible approach to {pathway_name} opportunities."
+        )
+
+
+def _make_pathway_readiness(
+    pathway_name: str,
+    profile: "CareerDNAProfile",
+    raw_cv_text: str,
+    target_sector: Optional[str],
+    target_seniority: Optional[str],
+) -> Optional[PathwayReadiness]:
+    """Compute PathwayReadiness for a single parsed pathway name."""
+    try:
+        tp = build_target_profile(pathway_name, target_sector, target_seniority)
+        pd = compute_pivot_delta(profile, tp, raw_cv_text=raw_cv_text)
+        n_gaps = len(pd.priority_gaps)
+
+        base = int(pd.overall_fit_score * 100)
+        penalty = min(n_gaps * 8, 25)
+        readiness_score = max(10, min(100, base - penalty))
+
+        if pd.overall_fit_score >= 0.65 and n_gaps == 0:
+            band = "strong"
+        elif pd.overall_fit_score >= 0.50 or (pd.overall_fit_score >= 0.35 and n_gaps <= 1):
+            band = "credible"
+        elif pd.overall_fit_score >= 0.28:
+            band = "partial"
+        else:
+            band = "early-stage"
+
+        key_gaps = [g.label for g in pd.priority_gaps[:3]]
+        interpretation = _pathway_interpretation(pathway_name, pd.overall_fit_score, band, key_gaps)
+
+        return PathwayReadiness(
+            pathway_name=pathway_name,
+            matched_profile_name=tp.role_name,
+            fit_score=round(pd.overall_fit_score, 3),
+            readiness_score=readiness_score,
+            readiness_band=band,
+            key_strengths=pd.strongest_matches[:4],
+            key_gaps=key_gaps,
+            interpretation=interpretation,
+            pivot_delta=pd,
+        )
+    except Exception as exc:
+        logger.warning("pathway analysis failed for %s: %s", pathway_name, exc)
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -404,42 +493,152 @@ def generate_career_dna_report(input_data: RawInput) -> PipelineOutput:
         logger.warning("Narrative engine not yet implemented: %s", exc)
         warnings.append("Narrative report is not yet available (engine pending implementation).")
 
-    # Stage 10 — Transition analysis stack (optional, only when target_role supplied)
+    # Stage 10 — Career trajectory (uses enriched roles from cv_parser)
+    career_trajectory_obj: Optional[CareerTrajectory] = None
+    try:
+        career_trajectory_obj = build_career_trajectory(roles)
+        logger.info("trajectory_engine: type=%s confidence=%.2f",
+                    career_trajectory_obj.trajectory_type,
+                    career_trajectory_obj.confidence_score)
+    except Exception as exc:
+        logger.warning("trajectory_engine failed: %s", exc)
+        warnings.append(f"Career trajectory analysis could not be completed: {exc}")
+
+    # Stage 11 — Transition analysis stack (optional, only when target_role supplied)
     target_profile_obj: Optional[TargetRoleProfile] = None
     pivot_delta_obj: Optional[PivotDeltaReport] = None
     pivot_narrative_obj: Optional[PivotNarrative] = None
     stakeholder_feedback_obj: Optional[StakeholderFeedback] = None
     decision_plan_obj: Optional[DecisionUpgradePlan] = None
     executive_report_obj: Optional[ExecutiveTransitionReport] = None
-    formatted_report_str: Optional[str] = None
+    compound_pathway_results: Optional[List[PathwayReadiness]] = None
+
     if input_data.target_role:
         try:
-            target_profile_obj = build_target_profile(
-                input_data.target_role,
-                input_data.target_sector,
-                input_data.target_seniority,
-            )
-            pivot_delta_obj = compute_pivot_delta(profile, target_profile_obj, raw_cv_text=input_data.cv_text)
-            pivot_narrative_obj = build_pivot_narrative(pivot_delta_obj, target_profile_obj)
-            stakeholder_feedback_obj = simulate_stakeholder_feedback(pivot_delta_obj, target_profile_obj)
-            decision_plan_obj = build_decision_upgrade_plan(pivot_delta_obj, stakeholder_feedback_obj)
-            executive_report_obj = assemble_executive_report(
-                pivot_delta_obj, pivot_narrative_obj,
-                stakeholder_feedback_obj, decision_plan_obj,
-            )
-            formatted_report_str = format_executive_report(executive_report_obj)
-            logger.info(
-                "transition_analysis: target=%s verdict=%s fit=%.2f upgrade_to=%s",
-                input_data.target_role,
-                stakeholder_feedback_obj.verdict,
-                pivot_delta_obj.overall_fit_score,
-                decision_plan_obj.target_verdict,
-            )
+            parsed_pathways = parse_compound_target(input_data.target_role)
+            is_compound = len(parsed_pathways) > 1
+
+            if is_compound:
+                # Evaluate each pathway; use best-fit for single-pathway downstream steps
+                pathway_results: List[PathwayReadiness] = []
+                for pathway_name in parsed_pathways:
+                    pr = _make_pathway_readiness(
+                        pathway_name, profile, input_data.cv_text,
+                        input_data.target_sector, input_data.target_seniority,
+                    )
+                    if pr:
+                        pathway_results.append(pr)
+
+                if pathway_results:
+                    pathway_results.sort(key=lambda p: p.readiness_score, reverse=True)
+                    compound_pathway_results = pathway_results
+                    best = pathway_results[0]
+                    target_profile_obj = build_target_profile(
+                        best.pathway_name,
+                        input_data.target_sector,
+                        input_data.target_seniority,
+                    )
+                    pivot_delta_obj = best.pivot_delta
+                    logger.info(
+                        "compound_target: %d pathways parsed, best=%s fit=%.2f",
+                        len(pathway_results), best.pathway_name, best.fit_score,
+                    )
+            else:
+                target_profile_obj = build_target_profile(
+                    input_data.target_role,
+                    input_data.target_sector,
+                    input_data.target_seniority,
+                )
+                pivot_delta_obj = compute_pivot_delta(
+                    profile, target_profile_obj, raw_cv_text=input_data.cv_text
+                )
+
+            # Run remaining transition analysis on the selected pivot_delta / target_profile
+            if pivot_delta_obj and target_profile_obj:
+                pivot_narrative_obj = build_pivot_narrative(pivot_delta_obj, target_profile_obj)
+                stakeholder_feedback_obj = simulate_stakeholder_feedback(pivot_delta_obj, target_profile_obj)
+                decision_plan_obj = build_decision_upgrade_plan(pivot_delta_obj, stakeholder_feedback_obj)
+                executive_report_obj = assemble_executive_report(
+                    pivot_delta_obj, pivot_narrative_obj,
+                    stakeholder_feedback_obj, decision_plan_obj,
+                )
+                logger.info(
+                    "transition_analysis: target=%s verdict=%s fit=%.2f upgrade_to=%s",
+                    input_data.target_role,
+                    stakeholder_feedback_obj.verdict,
+                    pivot_delta_obj.overall_fit_score,
+                    decision_plan_obj.target_verdict,
+                )
+
         except Exception as exc:
             logger.warning("transition analysis failed: %s", exc)
             warnings.append(f"Transition analysis could not be completed: {exc}")
 
-    # Stage 11 — Assemble output
+    # Stage 12 — Heuristic scoring
+    heuristic_scores_obj = None
+    try:
+        heuristic_scores_obj = build_heuristic_scores(
+            profile=profile,
+            roles=roles,
+            pivot_delta=pivot_delta_obj,
+            trajectory=career_trajectory_obj,
+            market_context_notes=input_data.market_context_notes,
+            compound_pathways=compound_pathway_results,
+        )
+    except Exception as exc:
+        logger.warning("heuristic_scoring failed: %s", exc)
+        warnings.append(f"Heuristic scoring could not be completed: {exc}")
+
+    # Stage 12b — LLM executive judgment (optional, Concierge tier only)
+    llm_judgment_obj: Optional[LLMReportIntelligence] = None
+    if input_data.llm_judgment_enabled:
+        try:
+            llm_judgment_obj = build_llm_judgment(
+                roles=roles,
+                profile=profile,
+                trajectory=career_trajectory_obj,
+                heuristic_scores=heuristic_scores_obj,
+                compound_pathways=compound_pathway_results,
+                signal_summary=build_signal_summary(processed, suppressed_count),
+                pipeline_warnings=warnings,
+                target_role=input_data.target_role,
+                cv_text=input_data.cv_text,
+                market_context_notes=input_data.market_context_notes,
+            )
+            if llm_judgment_obj:
+                logger.info(
+                    "llm_report_intel: verdict=%s adj=%+d tier=%s confidence=%s",
+                    llm_judgment_obj.score_verdict,
+                    llm_judgment_obj.score_adjustment,
+                    llm_judgment_obj.profile_tier,
+                    llm_judgment_obj.confidence_level,
+                )
+        except Exception as exc:
+            logger.warning("llm_report_intel stage failed: %s", exc)
+            warnings.append(f"Report intelligence layer could not be completed: {exc}")
+
+    # Stage 13 — Format 12-section Career DNA report (always generated)
+    formatted_report_str: Optional[str] = None
+    try:
+        formatted_report_str = format_career_dna_report(
+            input_data=input_data,
+            profile=profile,
+            roles=roles,
+            career_trajectory=career_trajectory_obj,
+            heuristic_scores=heuristic_scores_obj,
+            pivot_delta=pivot_delta_obj,
+            pivot_narrative=pivot_narrative_obj,
+            stakeholder_feedback=stakeholder_feedback_obj,
+            decision_plan=decision_plan_obj,
+            executive_report=executive_report_obj,
+            compound_pathways=compound_pathway_results,
+            llm_judgment=llm_judgment_obj,
+        )
+    except Exception as exc:
+        logger.warning("format_career_dna_report failed: %s", exc)
+        warnings.append(f"Report formatting could not be completed: {exc}")
+
+    # Stage 14 — Assemble output
     return build_pipeline_output(
         profile, report, processed, suppressed_count, warnings,
         target_profile=target_profile_obj,
@@ -449,4 +648,9 @@ def generate_career_dna_report(input_data: RawInput) -> PipelineOutput:
         decision_plan=decision_plan_obj,
         executive_report=executive_report_obj,
         formatted_report=formatted_report_str,
+        heuristic_scores=heuristic_scores_obj,
+        career_trajectory=career_trajectory_obj,
+        enriched_roles=roles,
+        compound_pathways=compound_pathway_results,
+        llm_judgment=llm_judgment_obj,
     )

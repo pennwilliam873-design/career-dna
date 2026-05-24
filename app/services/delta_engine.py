@@ -119,6 +119,168 @@ _SYNONYMS: dict[str, list[str]] = {
         "p&l", "business unit", "revenue accountability", "budget", "full ownership",
     ],
     "scaled organisation": ["scaled", "scaling", "growth", "headcount", "expanded"],
+    # Strategy / Transformation
+    "strategic planning": [
+        "strategy", "strategic", "planning", "roadmap", "corporate strategy",
+        "strategic direction", "business planning",
+    ],
+    "business strategy": [
+        "strategy", "strategic", "business planning", "strategic planning",
+        "corporate strategy", "strategy work",
+    ],
+    "cross-functional leadership": [
+        "cross-functional", "cross functional", "matrix", "multi-function",
+        "cross-business", "across functions", "across business units",
+    ],
+    "change management": [
+        "change programme", "transformation", "change", "managing change",
+        "change lead", "change initiative", "business change",
+    ],
+    "market analysis": [
+        "market sizing", "market research", "market intelligence", "market",
+        "analysis", "competitive analysis", "market assessment",
+    ],
+    "organisational design": [
+        "org design", "operating model", "organisation design", "team structure",
+        "organisational", "restructur",
+    ],
+    "executive committee": [
+        "exco", "exec committee", "executive team", "senior leadership",
+        "c-suite", "leadership team", "board",
+    ],
+    "market intelligence": [
+        "market analysis", "market research", "competitive", "market",
+        "intelligence", "landscape analysis",
+    ],
+    "competitive positioning": [
+        "competitive", "positioning", "market position", "differentiation",
+        "strategic positioning", "competitive advantage",
+    ],
+    "strategic initiatives": [
+        "strategic", "initiative", "transformation", "programme",
+        "strategic programme", "priority",
+    ],
+    "growth strategy": [
+        "growth", "strategy", "strategic growth", "expansion", "scale",
+        "market expansion", "revenue growth",
+    ],
+    "business case": [
+        "business case", "investment case", "rationale", "case", "roi",
+        "cost-benefit", "financial case",
+    ],
+    "scenario planning": [
+        "scenario", "planning", "strategic options", "option analysis",
+        "sensitivity", "what-if",
+    ],
+    "transformation": [
+        "transformation", "change programme", "business transformation",
+        "operating model", "restructur", "change management",
+    ],
+    "programme management": [
+        "programme", "program", "project portfolio", "delivery",
+        "programme management", "pmo",
+    ],
+    "board reporting": [
+        "board", "exec", "exco", "governance", "stakeholder reporting",
+        "executive reporting", "board update",
+    ],
+    # NED / governance calibration
+    # These maps let a senior executive's vocabulary pattern-match NED requirements
+    # without already being a NED. The synonym check hits structured signals.
+    "governance": [
+        "board", "board governance", "oversight", "accountability",
+        "compliance", "board advisory", "board reporting",
+    ],
+    "executive leadership": [
+        "executive", "leadership", "c-suite", "senior leadership",
+        "exec team", "leadership team", "ceo", "managing director",
+    ],
+    "risk oversight": [
+        "risk management", "risk", "governance", "oversight",
+        "compliance", "audit", "board risk",
+    ],
+    "strategic challenge": [
+        "strategic", "advisory", "challenge", "board level",
+        "non-executive", "board advisory", "strategy",
+    ],
+    "industry expertise": [
+        "expertise", "industry", "sector", "domain", "specialist",
+        "background", "experience",
+    ],
+    "committee experience": [
+        "committee", "exco", "executive committee", "board",
+        "governance", "advisory",
+    ],
+    # NED language-marker synonyms
+    "fiduciary": [
+        "accountability", "governance", "board", "stewardship",
+        "responsibility", "oversight",
+    ],
+    "stewardship": ["governance", "oversight", "accountability", "board"],
+    "risk appetite": ["risk", "governance", "board", "oversight", "compliance"],
+    "shareholder interests": [
+        "shareholder", "stakeholder", "board", "governance", "commercial",
+    ],
+    "board engagement": [
+        "board", "board reporting", "governance",
+        "presented to the board", "executive committee",
+    ],
+    "long-term value": [
+        "long-term", "value", "strategic", "governance", "sustainable",
+    ],
+    # Strategic advisory calibration
+    "advisory": [
+        "advisor", "advisory", "strategic advisor", "board advisor",
+        "consulting", "advisory practice",
+    ],
+    "sector expertise": [
+        "sector", "expertise", "industry", "domain", "media",
+        "specialist", "background",
+    ],
+    "content monetisation": [
+        "content", "licensing", "distribution", "monetisation",
+        "revenue", "media", "commercial",
+    ],
+    "client development": [
+        "commercial", "partnerships", "business development",
+        "client", "advisory", "relationship",
+    ],
+    "board communication": [
+        "board", "board reporting", "stakeholder", "executive",
+        "presented to the board", "executive committee",
+    ],
+    "pattern recognition": [
+        "experience", "insight", "judgment", "strategic",
+        "executive", "leadership", "expertise",
+    ],
+    # Group CEO / Regional President calibration
+    "enterprise leadership": [
+        "managing director", "chief executive", "ceo", "executive",
+        "senior leadership", "leadership team", "executive vice president",
+    ],
+    "commercial judgment": ["commercial", "revenue", "p&l", "business", "growth"],
+    "market expansion": [
+        "market entry", "expansion", "new market", "geographic expansion",
+        "apac", "regional expansion", "international",
+    ],
+    "regional leadership": [
+        "regional", "apac", "asia pacific", "managing director",
+        "evp", "regional head", "multi-country", "country",
+    ],
+    "go-to-market": ["market entry", "launch", "distribution", "commercial", "partnerships"],
+    "cultural leadership": ["culture", "team", "leadership", "people", "values", "talent"],
+    "commercial strategy": [
+        "commercial", "strategy", "revenue", "growth",
+        "business development", "partnerships",
+    ],
+    "team leadership": [
+        "led a team", "team of", "staff", "direct reports",
+        "headcount", "people management", "built the team",
+    ],
+    "regional p&l": [
+        "p&l", "profit and loss", "regional budget",
+        "p&l accountability", "revenue accountability",
+    ],
     # VC-specific
     "deal sourcing": ["deal", "sourcing", "pipeline", "origination", "network"],
     "founder relationships": ["founder", "startup", "entrepreneur", "relationship"],
@@ -232,6 +394,19 @@ def compute_pivot_delta(
         + comm_rate  * 0.20,
         3,
     )
+
+    # NED-specific formal-directorship gate. Advisory/AICD/board-reporting vocabulary
+    # is valuable supporting evidence but should not alone push NED fit above
+    # executive-operating pathways (Group CEO, Regional President).
+    # Cap lifts when the profile contains at least one formal appointment marker.
+    if target.role_name and "non-executive director" in target.role_name.lower():
+        _NED_FORMAL_MARKERS = [
+            "non-executive director of", "appointed director", "independent director",
+            "company directorship", "board appointment", "public company board",
+            "private company board",
+        ]
+        if not any(_term_matched(m, exact_corpus, synonym_corpus) for m in _NED_FORMAL_MARKERS):
+            overall_fit = min(overall_fit, 0.35)
 
     # --- Strongest matches (deduplicated, target-language labels) ---
     strongest_matches = list(dict.fromkeys(
