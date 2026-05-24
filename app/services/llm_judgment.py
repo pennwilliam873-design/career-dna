@@ -199,6 +199,24 @@ _NAMED_VENTURE_RE = re.compile(
 
 _PIPE_LEADER_RE = re.compile(r"^(.+?)\s*\|", re.MULTILINE)
 
+# Contact / personal-header lines must never be treated as organisation names.
+# Matches: email addresses, phone numbers, URLs, and "label: value" contact pairs.
+_CONTACT_ORG_RE = re.compile(
+    r"""
+    (?:
+        [a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}   # email
+        | (?:phone|tel|mobile|cell|fax|email|e-mail
+           |linkedin|github|twitter|skype|contact)\s*:        # contact label
+        | \+\d[\d\s\-().]{5,}                                 # international phone
+        | https?://                                            # URL
+        | www\.[a-zA-Z0-9]                                    # www
+        | linkedin\.com                                        # LinkedIn
+        | github\.com                                          # GitHub
+    )
+    """,
+    re.I | re.VERBOSE,
+)
+
 
 def _extract_candidate_titles(cv_text: str) -> List[str]:
     found: List[str] = []
@@ -230,6 +248,8 @@ def _extract_named_entities(cv_text: str) -> dict:
     org_candidates: List[str] = []
     for m in _PIPE_LEADER_RE.finditer(cv_text):
         candidate = m.group(1).strip()
+        if _CONTACT_ORG_RE.search(candidate):
+            continue  # skip emails, phones, URLs masquerading as org names
         if 2 <= len(candidate.split()) <= 6 and not re.match(r"^\d", candidate):
             if candidate not in org_candidates:
                 org_candidates.append(candidate)
@@ -254,17 +274,22 @@ def _build_evidence_package(
 ) -> dict:
     role_summaries = []
     for r in roles:
+        # Sanitise: if the parser assigned a contact line (email/phone/URL) as an
+        # organisation, replace it before it enters the LLM evidence package.
+        raw_org = r.organisation or ""
+        safe_org = "Unknown Organisation" if _CONTACT_ORG_RE.search(raw_org) else raw_org
+
         title_has_exec = bool(_EXEC_TITLE_RE.search(r.title or ""))
-        org_has_exec = bool(_EXEC_TITLE_RE.search(r.organisation or ""))
+        org_has_exec = bool(_EXEC_TITLE_RE.search(safe_org))
         has_pipe_in_title = "|" in (r.title or "")
-        org_is_unknown = r.organisation == "Unknown Organisation"
+        org_is_unknown = safe_org == "Unknown Organisation"
         has_inversion = (
             has_pipe_in_title
             or org_is_unknown
             or (org_has_exec and not title_has_exec)
         )
         if has_inversion:
-            title_display = r.organisation if org_has_exec else "unknown (parser mis-assignment)"
+            title_display = safe_org if org_has_exec else "unknown (parser mis-assignment)"
             org_candidate = r.title
         else:
             title_display = r.title
@@ -272,7 +297,7 @@ def _build_evidence_package(
 
         entry: dict = {
             "title": title_display,
-            "organisation": r.organisation,
+            "organisation": safe_org,
             "years": f"{r.start_year or '?'}–{r.end_year or 'present'}",
             "seniority": r.seniority or r.inferred_seniority,
             "duration_months": r.duration_months,

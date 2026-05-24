@@ -72,6 +72,24 @@ _SINGLE_YEAR  = re.compile(r"\b((?:19|20)\d{2})\b")
 _BULLET_LINE  = re.compile(r"^\s*[-•*▪◦]\s+(.+)$", re.MULTILINE)
 _BLANK_LINE   = re.compile(r"\n\s*\n")
 
+# Matches lines that are contact / personal-header content — never a valid org or role title.
+# Used to filter out emails, phones, URLs, and "label: value" contact lines.
+_CONTACT_LINE_RE = re.compile(
+    r"""
+    (?:
+        [a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}   # email address
+        | (?:phone|tel|mobile|cell|fax)\s*:                   # phone label
+        | \+\d[\d\s\-().]{5,}                                 # international phone
+        | https?://\S+                                         # URL
+        | www\.[a-zA-Z0-9]                                    # www URL
+        | linkedin\.com                                        # LinkedIn
+        | github\.com                                          # GitHub
+        | (?:email|e-mail|contact|skype|twitter)\s*:          # other contact labels
+    )
+    """,
+    re.I | re.VERBOSE,
+)
+
 # ---------------------------------------------------------------------------
 # Public interface
 # ---------------------------------------------------------------------------
@@ -123,11 +141,17 @@ def _segment_into_blocks(text: str) -> list[str]:
         line_start = text.rfind('\n', 0, m.start())
         pos = line_start + 1 if line_start >= 0 else 0
 
-        # Skip parenthetical inline dates (not role-header dates)
+        # Skip parenthetical inline dates (not role-header dates).
+        # Only skip when there is substantive text between '(' and the year —
+        # e.g. "(executive chair role, 2021–2023)".  Role-header dates such as
+        # "Carlyle Advisory Partners (2019–2024)" have nothing between '(' and
+        # the year, so text_between is empty and the date is kept.
         window = text[max(0, m.start() - 30): m.start()]
         last_open = window.rfind('(')
         if last_open >= 0 and ')' not in window[last_open + 1:]:
-            continue
+            text_between = window[last_open + 1:].strip()
+            if len(text_between) > 2:
+                continue
 
         positions.append(pos)
 
@@ -335,7 +359,9 @@ def _extract_title_org(lines: list[str]) -> Tuple[str, str]:
             stripped = _HEADER_DATE_STRIP.sub("", line).strip()
             if len(stripped) > 5 and not stripped.startswith("-"):
                 stripped = re.sub(r"\s*\([^)]{2,40}\)\s*$", "", stripped).strip()
-                stripped = stripped.rstrip(",;–—-").strip()
+                # Also strip a lone trailing "(" left when the date was in parens,
+                # e.g. "Carlyle Advisory Partners (2019–2024)" → "Carlyle Advisory Partners ("
+                stripped = stripped.rstrip(",;–—-(").strip()
 
                 # Priority: try to find org on the next line ("Org | City" format)
                 org_next = _extract_org_from_next_lines(lines, i)
@@ -354,8 +380,15 @@ def _extract_title_org(lines: list[str]) -> Tuple[str, str]:
                 elif parts and len(parts[0]) > 3:
                     return parts[0][:120], "Unknown Organisation"
 
-    # 3. Fallback: first non-date line is title, second is organisation
-    non_date = [l for l in lines if not _YEAR_RANGE.search(l) and not _SINGLE_YEAR.fullmatch(l.strip())]
+    # 3. Fallback: first non-date, non-contact line is title; second is organisation.
+    # Contact lines (email, phone, URL, label: value) are excluded so a personal
+    # header block never leaks into title/org extraction.
+    non_date = [
+        l for l in lines
+        if not _YEAR_RANGE.search(l)
+        and not _SINGLE_YEAR.fullmatch(l.strip())
+        and not _CONTACT_LINE_RE.search(l)
+    ]
     title = non_date[0] if non_date else "Unknown Role"
     org   = non_date[1] if len(non_date) > 1 else "Unknown Organisation"
     return title[:120], org[:120]
