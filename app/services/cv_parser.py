@@ -95,6 +95,28 @@ _CONTACT_LINE_RE = re.compile(
     re.I | re.VERBOSE,
 )
 
+# Matches CV section headings — formatting labels that are never valid role titles or org names.
+# Prefix patterns (executive summary, professional skills, etc.) may carry a "– subtitle" suffix.
+# Exact patterns (current, former, qualifications, etc.) must match the whole stripped line.
+_CV_SECTION_HEADER_RE = re.compile(
+    r"""
+    ^(?:
+        (?:
+            executive\s+summ(?:ary)?
+            | professional\s+(?:skills?|experience|background|profile)
+            | key\s+(?:career\s+)?(?:skills?|strengths?|achievements?)
+            | (?:detailed\s+)?(?:career|professional|employment)\s+(?:experience|history)
+            | boards?\s*(?:&|and)\s*(?:director\w*|appointment\w*|role\w*|governance\w*)
+        )(?:\s*[-–—].*)?$
+        |
+        (?:qualifications?|education(?:al)?|awards?|references?
+           |current|former|directorships?|skills\s+summary
+           |personal\s+(?:profile|statement)|career\s+summary)\s*$
+    )
+    """,
+    re.I | re.VERBOSE,
+)
+
 # ---------------------------------------------------------------------------
 # Public interface
 # ---------------------------------------------------------------------------
@@ -246,6 +268,12 @@ def _parse_role_block(block: str) -> Optional[ExtractedRole]:
     start_year, end_year = _extract_years(block)
     duration = _compute_duration(start_year, end_year)
     title, organisation = _extract_title_org(lines)
+
+    # Discard blocks whose extracted title is a CV section heading or contains encoding
+    # artifacts — these are structural labels, not employment records.
+    if _CV_SECTION_HEADER_RE.match((title or "").strip()) or '�' in (title or ""):
+        return None
+
     bullets = [m.group(1).strip() for m in _BULLET_LINE.finditer(block)]
     classifier = classify_title(title)
 
@@ -387,14 +415,16 @@ def _extract_title_org(lines: list[str]) -> Tuple[str, str]:
                 elif parts and len(parts[0]) > 3:
                     return parts[0][:120], "Unknown Organisation"
 
-    # 3. Fallback: first non-date, non-contact line is title; second is organisation.
-    # Contact lines (email, phone, URL, label: value) are excluded so a personal
-    # header block never leaks into title/org extraction.
+    # 3. Fallback: first non-date, non-contact, non-section-header line is title.
+    # Section header lines (e.g. "Executive summary", "Professional skills") and
+    # encoding-artifact lines are excluded so CV structure labels never become role titles.
     non_date = [
         l for l in lines
         if not _YEAR_RANGE.search(l)
         and not _SINGLE_YEAR.fullmatch(l.strip())
         and not _CONTACT_LINE_RE.search(l)
+        and not _CV_SECTION_HEADER_RE.match(l.strip())
+        and '�' not in l
     ]
     title = non_date[0] if non_date else "Unknown Role"
     org   = non_date[1] if len(non_date) > 1 else "Unknown Organisation"

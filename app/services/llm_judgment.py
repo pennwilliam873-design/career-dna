@@ -222,6 +222,27 @@ _CONTACT_ORG_RE = re.compile(
     re.I | re.VERBOSE,
 )
 
+# CV section headings — structural labels that must never appear as role titles or org names.
+# Mirrors the pattern in cv_parser._CV_SECTION_HEADER_RE; kept separate to avoid circular imports.
+_CV_SECTION_HEADER_RE = re.compile(
+    r"""
+    ^(?:
+        (?:
+            executive\s+summ(?:ary)?
+            | professional\s+(?:skills?|experience|background|profile)
+            | key\s+(?:career\s+)?(?:skills?|strengths?|achievements?)
+            | (?:detailed\s+)?(?:career|professional|employment)\s+(?:experience|history)
+            | boards?\s*(?:&|and)\s*(?:director\w*|appointment\w*|role\w*|governance\w*)
+        )(?:\s*[-–—].*)?$
+        |
+        (?:qualifications?|education(?:al)?|awards?|references?
+           |current|former|directorships?|skills\s+summary
+           |personal\s+(?:profile|statement)|career\s+summary)\s*$
+    )
+    """,
+    re.I | re.VERBOSE,
+)
+
 
 def _extract_candidate_titles(cv_text: str) -> List[str]:
     found: List[str] = []
@@ -255,6 +276,10 @@ def _extract_named_entities(cv_text: str) -> dict:
         candidate = m.group(1).strip()
         if _CONTACT_ORG_RE.search(candidate):
             continue  # skip emails, phones, URLs masquerading as org names
+        if _CV_SECTION_HEADER_RE.match(candidate):
+            continue  # skip CV section headings masquerading as org names
+        if '�' in candidate:
+            continue  # skip encoding artifacts
         if 2 <= len(candidate.split()) <= 6 and not re.match(r"^\d", candidate):
             if candidate not in org_candidates:
                 org_candidates.append(candidate)
@@ -279,10 +304,20 @@ def _build_evidence_package(
 ) -> dict:
     role_summaries = []
     for r in roles:
-        # Sanitise: if the parser assigned a contact line (email/phone/URL) as an
-        # organisation, replace it before it enters the LLM evidence package.
+        # Skip roles whose title is a CV section heading or contains encoding artifacts —
+        # these are structural labels that slipped through the parser, not employment records.
+        raw_title = r.title or ""
+        if _CV_SECTION_HEADER_RE.match(raw_title.strip()) or '�' in raw_title:
+            continue
+
+        # Sanitise: if the parser assigned a contact line (email/phone/URL) or a CV section
+        # heading as an organisation, replace it before it enters the LLM evidence package.
         raw_org = r.organisation or ""
-        safe_org = "Unknown Organisation" if _CONTACT_ORG_RE.search(raw_org) else raw_org
+        safe_org = (
+            "Unknown Organisation"
+            if _CONTACT_ORG_RE.search(raw_org) or _CV_SECTION_HEADER_RE.match(raw_org.strip()) or '�' in raw_org
+            else raw_org
+        )
 
         title_has_exec = bool(_EXEC_TITLE_RE.search(r.title or ""))
         org_has_exec = bool(_EXEC_TITLE_RE.search(safe_org))
@@ -295,7 +330,14 @@ def _build_evidence_package(
         )
         if has_inversion:
             title_display = safe_org if org_has_exec else "unknown (parser mis-assignment)"
-            org_candidate = r.title
+            # Only surface r.title as an org_candidate if it is a real employer string,
+            # not a section heading or an encoding-artifact line.
+            raw_t = r.title or ""
+            org_candidate = (
+                None
+                if _CV_SECTION_HEADER_RE.match(raw_t.strip()) or '�' in raw_t
+                else raw_t
+            )
         else:
             title_display = r.title
             org_candidate = None
