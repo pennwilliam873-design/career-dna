@@ -357,7 +357,7 @@ def _build_evidence_package(
             or (org_has_exec and not title_has_exec)
         )
         if has_inversion:
-            title_display = safe_org if org_has_exec else "unknown (parser mis-assignment)"
+            title_display = safe_org if org_has_exec else None  # null → LLM gets no fake title
             # Only surface r.title as an org_candidate if it is a real employer string —
             # not a section heading, encoding artifact, or generic placeholder label.
             raw_t = r.title or ""
@@ -374,9 +374,20 @@ def _build_evidence_package(
             title_display = r.title
             org_candidate = None
 
+        # Emit null rather than the placeholder string so the LLM cannot
+        # treat "Unknown Organisation" or "unknown (parser mis-assignment)"
+        # as named employer facts.
+        display_org = None if safe_org == "Unknown Organisation" else safe_org
+
+        # Skip entries that carry no employer signal at all — both title and org
+        # are unresolved, meaning there is nothing useful to tell the LLM about
+        # who this person worked for in this period.
+        if title_display is None and display_org is None:
+            continue
+
         entry: dict = {
             "title": title_display,
-            "organisation": safe_org,
+            "organisation": display_org,
             "years": f"{r.start_year or '?'}–{r.end_year or 'present'}",
             "seniority": r.seniority or r.inferred_seniority,
             "duration_months": r.duration_months,
@@ -572,16 +583,43 @@ _SANITISE_PATTERNS: list[re.Pattern] = [
     re.compile(r"respond in json\s*[:.]?\s*", re.I),
 ]
 
+# Placeholder strings that must never survive into LLM prose or evidence_used.
+# "Unknown Organisation" and the parser mis-assignment label are internal fallbacks —
+# they must not appear as named employer facts in anything the user sees.
+_PLACEHOLDER_ORG_RE = re.compile(
+    r"\b(?:Unknown\s+Organi[sz]ation|unknown\s+\(parser\s+mis.assignment\))\b",
+    re.I,
+)
+
 
 def _sanitise_llm_text(text: Optional[str]) -> Optional[str]:
-    """Remove prompt section labels and boilerplate that the LLM echoed back."""
+    """Remove prompt section labels, boilerplate, and internal placeholder strings."""
     if not text:
         return text
     result = text
     for pat in _SANITISE_PATTERNS:
         result = pat.sub("", result)
-    result = result.strip()
+    # Strip any surviving placeholder employer references.
+    # Replace "at Unknown Organisation" (and variants) with neutral phrasing.
+    result = re.sub(
+        r"\bat\s+Unknown\s+Organi[sz]ation\b",
+        "in senior executive roles",
+        result,
+        flags=re.I,
+    )
+    result = _PLACEHOLDER_ORG_RE.sub("", result)
+    result = re.sub(r"\s{2,}", " ", result).strip()
     return result if result else None
+
+
+def _sanitise_evidence_used(items: List[str]) -> List[str]:
+    """Remove any evidence_used entries that reference internal placeholder strings."""
+    cleaned = []
+    for item in items:
+        if _PLACEHOLDER_ORG_RE.search(item):
+            continue
+        cleaned.append(item)
+    return cleaned
 
 
 # ---------------------------------------------------------------------------
@@ -629,7 +667,7 @@ def _parse_and_validate(
     weakest_pathway = data.get("weakest_pathway") or None
     score_verdict = str(data.get("score_verdict", "fair"))
     score_adjustment_raw = int(data.get("score_adjustment", 0))
-    evidence_used = list(data.get("evidence_used", []))[:6]
+    evidence_used = _sanitise_evidence_used(list(data.get("evidence_used", []))[:6])
     confidence_level = str(data.get("confidence_level", "medium"))
     warnings = list(data.get("warnings", []))
 
