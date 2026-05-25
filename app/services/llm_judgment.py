@@ -222,6 +222,28 @@ _CONTACT_ORG_RE = re.compile(
     re.I | re.VERBOSE,
 )
 
+# Generic placeholder words sometimes used instead of a real employer name.
+# Mirrors cv_parser._GENERIC_ORG_LABELS; kept separate to avoid circular imports.
+_GENERIC_ORG_LABELS: frozenset[str] = frozenset({
+    "institution", "institutions",
+    "organisation", "organisations",
+    "organization", "organizations",
+    "company", "companies",
+    "employer", "employers",
+    "business", "businesses",
+    "firm", "firms",
+    "unknown",
+    "entity", "entities",
+    "n/a", "na", "tbc", "tbd",
+    "undisclosed", "confidential",
+    "not disclosed", "not available",
+})
+
+
+def _is_generic_org(text: str) -> bool:
+    return text.strip().lower() in _GENERIC_ORG_LABELS
+
+
 # CV section headings — structural labels that must never appear as role titles or org names.
 # Mirrors the pattern in cv_parser._CV_SECTION_HEADER_RE; kept separate to avoid circular imports.
 _CV_SECTION_HEADER_RE = re.compile(
@@ -310,12 +332,18 @@ def _build_evidence_package(
         if _CV_SECTION_HEADER_RE.match(raw_title.strip()) or '�' in raw_title:
             continue
 
-        # Sanitise: if the parser assigned a contact line (email/phone/URL) or a CV section
-        # heading as an organisation, replace it before it enters the LLM evidence package.
+        # Sanitise: replace contact lines, section headings, encoding artifacts, and generic
+        # placeholder labels (Institution, Company, Firm, etc.) with "Unknown Organisation"
+        # so they never reach the LLM as named employers.
         raw_org = r.organisation or ""
         safe_org = (
             "Unknown Organisation"
-            if _CONTACT_ORG_RE.search(raw_org) or _CV_SECTION_HEADER_RE.match(raw_org.strip()) or '�' in raw_org
+            if (
+                _CONTACT_ORG_RE.search(raw_org)
+                or _CV_SECTION_HEADER_RE.match(raw_org.strip())
+                or _is_generic_org(raw_org)
+                or '�' in raw_org
+            )
             else raw_org
         )
 
@@ -330,12 +358,16 @@ def _build_evidence_package(
         )
         if has_inversion:
             title_display = safe_org if org_has_exec else "unknown (parser mis-assignment)"
-            # Only surface r.title as an org_candidate if it is a real employer string,
-            # not a section heading or an encoding-artifact line.
+            # Only surface r.title as an org_candidate if it is a real employer string —
+            # not a section heading, encoding artifact, or generic placeholder label.
             raw_t = r.title or ""
             org_candidate = (
                 None
-                if _CV_SECTION_HEADER_RE.match(raw_t.strip()) or '�' in raw_t
+                if (
+                    _CV_SECTION_HEADER_RE.match(raw_t.strip())
+                    or _is_generic_org(raw_t)
+                    or '�' in raw_t
+                )
                 else raw_t
             )
         else:

@@ -95,6 +95,30 @@ _CONTACT_LINE_RE = re.compile(
     re.I | re.VERBOSE,
 )
 
+# Generic placeholder words that are sometimes written in place of an employer name.
+# These are common English nouns, not real organisation names, and must never reach LLM evidence.
+# Matching is case-insensitive exact-match on the stripped org candidate string.
+_GENERIC_ORG_LABELS: frozenset[str] = frozenset({
+    "institution", "institutions",
+    "organisation", "organisations",
+    "organization", "organizations",
+    "company", "companies",
+    "employer", "employers",
+    "business", "businesses",
+    "firm", "firms",
+    "unknown",
+    "entity", "entities",
+    "n/a", "na", "tbc", "tbd",
+    "undisclosed", "confidential",
+    "not disclosed", "not available",
+})
+
+
+def _is_generic_org(text: str) -> bool:
+    """Return True if text is a generic placeholder, not a real organisation name."""
+    return text.strip().lower() in _GENERIC_ORG_LABELS
+
+
 # Matches CV section headings — formatting labels that are never valid role titles or org names.
 # Prefix patterns (executive summary, professional skills, etc.) may carry a "– subtitle" suffix.
 # Exact patterns (current, former, qualifications, etc.) must match the whole stripped line.
@@ -382,7 +406,8 @@ def _extract_title_org(lines: list[str]) -> Tuple[str, str]:
             title = m.group(1).strip()
             org   = m.group(2).strip()
             if title and org:
-                return title[:120], org[:120]
+                safe_org = "Unknown Organisation" if _is_generic_org(org) else org
+                return title[:120], safe_org[:120]
 
     # 2. Header line with embedded date: strip date suffix, then resolve title and org.
     #    Handles:
@@ -402,7 +427,8 @@ def _extract_title_org(lines: list[str]) -> Tuple[str, str]:
                 org_next = _extract_org_from_next_lines(lines, i)
                 if org_next != "Unknown Organisation":
                     # Next line gave us a clear org — use full stripped text as title
-                    return stripped[:120], org_next
+                    safe_next = "Unknown Organisation" if _is_generic_org(org_next) else org_next
+                    return stripped[:120], safe_next
 
                 # Fallback: comma-split the title line to find an embedded org
                 parts = [p.strip() for p in stripped.split(",") if p.strip()]
@@ -411,7 +437,9 @@ def _extract_title_org(lines: list[str]) -> Tuple[str, str]:
                     if last_lower in _GEOGRAPHY_QUALIFIERS:
                         # Trailing geography is part of the title scope, not the org
                         return stripped[:120], "Unknown Organisation"
-                    return ", ".join(parts[:-1])[:120], parts[-1][:120]
+                    candidate_org = parts[-1][:120]
+                    safe_org = "Unknown Organisation" if _is_generic_org(candidate_org) else candidate_org
+                    return ", ".join(parts[:-1])[:120], safe_org
                 elif parts and len(parts[0]) > 3:
                     return parts[0][:120], "Unknown Organisation"
 
@@ -426,8 +454,9 @@ def _extract_title_org(lines: list[str]) -> Tuple[str, str]:
         and not _CV_SECTION_HEADER_RE.match(l.strip())
         and '�' not in l
     ]
-    title = non_date[0] if non_date else "Unknown Role"
-    org   = non_date[1] if len(non_date) > 1 else "Unknown Organisation"
+    title   = non_date[0] if non_date else "Unknown Role"
+    org_raw = non_date[1] if len(non_date) > 1 else "Unknown Organisation"
+    org     = "Unknown Organisation" if _is_generic_org(org_raw) else org_raw
     return title[:120], org[:120]
 
 
