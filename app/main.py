@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException
@@ -14,6 +15,15 @@ from app.pipeline import (
     serialise_pipeline_error,
 )
 from app.schemas import RawInput
+from app.models.client import (
+    ClientRecord, ClientProfile, CreateClientRequest, UpdateClientRequest,
+    MarketRadarRequest, Opportunity, OpportunityRequest,
+)
+from app.data.storage import list_clients, get_client, create_client, update_client
+from app.services.positioning import generate_positioning
+from app.services.cv_intelligence import analyse_cv
+from app.services.market_radar import run_market_radar
+from app.services.advisor_brief import generate_advisor_brief
 
 app = FastAPI(title="Career DNA API")
 
@@ -82,3 +92,223 @@ def generate_dna(input_data: RawInput):
                 "recoverable": False,
             },
         )
+
+
+# ── Client workspace endpoints ────────────────────────────────────────────────
+
+
+@app.get("/clients")
+def get_clients():
+    clients = list_clients()
+    return JSONResponse(
+        status_code=200,
+        content=[c.model_dump(mode="json") for c in clients],
+    )
+
+
+@app.post("/clients")
+def post_client(body: CreateClientRequest):
+    if not body.name.strip():
+        raise HTTPException(status_code=422, detail="Client name is required.")
+    profile = ClientProfile(name=body.name.strip())
+    record = ClientRecord(profile=profile)
+    created = create_client(record)
+    return JSONResponse(status_code=201, content=created.model_dump(mode="json"))
+
+
+@app.get("/clients/{client_id}")
+def get_client_by_id(client_id: str):
+    record = get_client(client_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Client not found.")
+    return JSONResponse(status_code=200, content=record.model_dump(mode="json"))
+
+
+@app.put("/clients/{client_id}")
+def put_client(client_id: str, body: UpdateClientRequest):
+    record = get_client(client_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Client not found.")
+    record.profile = body.profile
+    updated = update_client(record)
+    return JSONResponse(status_code=200, content=updated.model_dump(mode="json"))
+
+
+@app.post("/clients/{client_id}/analyse-cv")
+def post_analyse_cv(client_id: str):
+    record = get_client(client_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Client not found.")
+    try:
+        result = analyse_cv(record.profile)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"CV analysis failed: {exc}")
+    # Structured path: set intelligence, clear any stale raw text
+    # Fallback path: set raw text, clear any stale structured intelligence
+    record.cv_intelligence = result.intelligence
+    record.cv_intelligence_raw = result.raw_text if result.parse_failed else None
+    record.cv_intelligence_generated_at = datetime.now(timezone.utc).isoformat()
+    updated = update_client(record)
+    return JSONResponse(status_code=200, content=updated.model_dump(mode="json"))
+
+
+@app.post("/clients/{client_id}/generate-positioning")
+def post_generate_positioning(client_id: str):
+    record = get_client(client_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Client not found.")
+    try:
+        result = generate_positioning(record.profile, record.cv_intelligence)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Positioning generation failed: {exc}")
+    record.positioning = result.positioning
+    record.positioning_raw = result.raw_text if result.parse_failed else None
+    record.positioning_generated_at = datetime.now(timezone.utc).isoformat()
+    updated = update_client(record)
+    return JSONResponse(status_code=200, content=updated.model_dump(mode="json"))
+
+
+@app.post("/clients/{client_id}/run-market-radar")
+def post_run_market_radar(client_id: str, body: MarketRadarRequest):
+    record = get_client(client_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Client not found.")
+    try:
+        result = run_market_radar(
+            record.profile,
+            cv_intelligence=record.cv_intelligence,
+            cv_intelligence_raw=record.cv_intelligence_raw,
+            positioning=record.positioning,
+            positioning_raw=record.positioning_raw,
+            manual_research=body.manual_research,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Market Radar failed: {exc}")
+    if result.is_complete and not result.parse_failed:
+        # Complete structured result — save everything, clear any previous warning
+        record.market_radar = result.radar
+        record.market_radar_raw = None
+        record.market_radar_generated_at = datetime.now(timezone.utc).isoformat()
+        record.market_radar_is_complete = True
+        record.market_radar_scan_warning = None
+    elif record.market_radar_is_complete:
+        # Incomplete result but a previous complete scan exists — preserve it, surface warning only
+        sections = ", ".join(result.missing_sections) if result.missing_sections else "multiple sections"
+        record.market_radar_scan_warning = (
+            f"Latest scan returned incomplete results (missing: {sections}). "
+            "Showing previous complete scan."
+        )
+    else:
+        # Incomplete result, no previous complete scan — save as draft
+        record.market_radar = result.radar
+        record.market_radar_raw = result.raw_text if result.parse_failed else None
+        record.market_radar_generated_at = datetime.now(timezone.utc).isoformat()
+        record.market_radar_is_complete = False
+        if result.missing_sections:
+            sections = ", ".join(result.missing_sections)
+            record.market_radar_scan_warning = (
+                f"Scan returned partial results — some sections are incomplete ({sections}). "
+                "Try refreshing the scan."
+            )
+        else:
+            record.market_radar_scan_warning = (
+                "Scan returned partial results. Try refreshing the scan."
+            )
+    updated = update_client(record)
+    return JSONResponse(status_code=200, content=updated.model_dump(mode="json"))
+
+
+# ── Opportunity endpoints ─────────────────────────────────────────────────────
+
+
+@app.post("/clients/{client_id}/opportunities")
+def post_create_opportunity(client_id: str, body: OpportunityRequest):
+    record = get_client(client_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Client not found.")
+    opp = Opportunity(
+        title=body.title,
+        company=body.company,
+        pathway=body.pathway,
+        source_type=body.source_type,
+        source_section=body.source_section,
+        confidence=body.confidence,
+        priority=body.priority,
+        status=body.status,
+        fit_rationale=body.fit_rationale,
+        evidence=body.evidence,
+        relationship_route=body.relationship_route,
+        next_action=body.next_action,
+        advisor_note=body.advisor_note,
+        sources=body.sources,
+    )
+    record.opportunities.append(opp)
+    updated = update_client(record)
+    return JSONResponse(status_code=201, content=updated.model_dump(mode="json"))
+
+
+@app.put("/clients/{client_id}/opportunities/{opp_id}")
+def put_opportunity(client_id: str, opp_id: str, body: OpportunityRequest):
+    record = get_client(client_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Client not found.")
+    opp = next((o for o in record.opportunities if o.id == opp_id), None)
+    if opp is None:
+        raise HTTPException(status_code=404, detail="Opportunity not found.")
+    opp.title = body.title
+    opp.company = body.company
+    opp.pathway = body.pathway
+    opp.source_type = body.source_type
+    opp.source_section = body.source_section
+    opp.confidence = body.confidence
+    opp.priority = body.priority
+    opp.status = body.status
+    opp.fit_rationale = body.fit_rationale
+    opp.evidence = body.evidence
+    opp.relationship_route = body.relationship_route
+    opp.next_action = body.next_action
+    opp.advisor_note = body.advisor_note
+    opp.sources = body.sources
+    opp.updated_at = datetime.now(timezone.utc).isoformat()
+    updated = update_client(record)
+    return JSONResponse(status_code=200, content=updated.model_dump(mode="json"))
+
+
+@app.delete("/clients/{client_id}/opportunities/{opp_id}")
+def delete_opportunity(client_id: str, opp_id: str):
+    record = get_client(client_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Client not found.")
+    before = len(record.opportunities)
+    record.opportunities = [o for o in record.opportunities if o.id != opp_id]
+    if len(record.opportunities) == before:
+        raise HTTPException(status_code=404, detail="Opportunity not found.")
+    updated = update_client(record)
+    return JSONResponse(status_code=200, content=updated.model_dump(mode="json"))
+
+
+# ── Advisor Brief endpoint ────────────────────────────────────────────────────
+
+
+@app.post("/clients/{client_id}/generate-advisor-brief")
+def post_generate_advisor_brief(client_id: str):
+    record = get_client(client_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Client not found.")
+    try:
+        result = generate_advisor_brief(record)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Advisor Brief generation failed: {exc}")
+    record.advisor_brief = result.brief
+    record.advisor_brief_raw = result.raw_text if result.parse_failed else None
+    record.advisor_brief_generated_at = datetime.now(timezone.utc).isoformat()
+    updated = update_client(record)
+    return JSONResponse(status_code=200, content=updated.model_dump(mode="json"))
