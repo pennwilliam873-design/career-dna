@@ -208,7 +208,7 @@ def _call_tool_use(client, cv_text: str, desired_next_move: str) -> Optional[CVI
         return None
 
     raw_input = tool_block.input
-    logger.debug(
+    logger.info(
         "cv_intelligence: tool_use input type=%s", type(raw_input).__name__
     )
 
@@ -236,7 +236,13 @@ def _call_tool_use(client, cv_text: str, desired_next_move: str) -> Optional[CVI
             f"tool_use input has unexpected type {type(raw_input).__name__}, expected dict"
         )
 
-    scale = data.get("leadership_scale") or {}
+    scale_raw = data.get("leadership_scale")
+    scale = scale_raw if isinstance(scale_raw, dict) else {}
+    if scale_raw is not None and not isinstance(scale_raw, dict):
+        logger.warning(
+            "cv_intelligence: leadership_scale was %s, not dict — defaulting to empty",
+            type(scale_raw).__name__,
+        )
     leadership_scale = LeadershipScale(
         team_size=scale.get("team_size") or "",
         revenue_or_pnl=scale.get("revenue_or_pnl") or "",
