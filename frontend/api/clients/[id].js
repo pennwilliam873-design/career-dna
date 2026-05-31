@@ -5,7 +5,7 @@ export default async function handler(req, res) {
   const { id } = req.query
   const method = req.method
 
-  if (method !== 'GET' && method !== 'PUT') {
+  if (method !== 'GET' && method !== 'PUT' && method !== 'DELETE') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 

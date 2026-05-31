@@ -31,6 +31,7 @@ export const api = {
   createClient:      (name)          => req('POST', '/clients', { name }),
   getClient:         (id)            => req('GET',  `/clients/${id}`),
   updateClient:      (id, profile)   => req('PUT',  `/clients/${id}`, { profile }),
+  deleteClient:      (id)            => req('DELETE', `/clients/${id}`),
   createOpportunity: (id, opp)       => req('POST', `/clients/${id}/opportunities`, opp),
   updateOpportunity: (id, oppId, opp) => req('PUT', `/clients/${id}/opportunities/${oppId}`, opp),
   deleteOpportunity: (id, oppId)     => req('DELETE', `/clients/${id}/opportunities/${oppId}`),

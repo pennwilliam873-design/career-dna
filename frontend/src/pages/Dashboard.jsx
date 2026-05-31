@@ -38,6 +38,16 @@ export default function Dashboard() {
     setNewName('')
   }
 
+  async function handleDelete(clientId) {
+    if (!window.confirm('Delete this client? This cannot be undone.')) return
+    try {
+      await api.deleteClient(clientId)
+      setClients(prev => prev.filter(c => c.id !== clientId))
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
   return (
     <div className="os-page">
       <nav className="os-nav">
@@ -98,7 +108,7 @@ export default function Dashboard() {
         ) : (
           <div className="os-client-grid">
             {clients.map(client => (
-              <ClientCard key={client.id} client={client} />
+              <ClientCard key={client.id} client={client} onDelete={handleDelete} />
             ))}
           </div>
         )}
@@ -113,7 +123,7 @@ export default function Dashboard() {
   )
 }
 
-function ClientCard({ client }) {
+function ClientCard({ client, onDelete }) {
   const name    = client.profile?.name || 'Unnamed'
   const role    = client.profile?.current_role || ''
   const created = client.created_at
@@ -151,6 +161,17 @@ function ClientCard({ client }) {
       <div className="os-client-card-meta">
         <span>{created}</span>
       </div>
+      <button
+        className="os-btn os-btn--danger os-btn--sm"
+        style={{ marginTop: 10, alignSelf: 'flex-start' }}
+        onClick={e => {
+          e.preventDefault()
+          e.stopPropagation()
+          onDelete(client.id)
+        }}
+      >
+        Delete
+      </button>
     </Link>
   )
 }

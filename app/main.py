@@ -19,7 +19,7 @@ from app.models.client import (
     ClientRecord, ClientProfile, CreateClientRequest, UpdateClientRequest,
     MarketRadarRequest, Opportunity, OpportunityRequest,
 )
-from app.data.storage import list_clients, get_client, create_client, update_client
+from app.data.storage import list_clients, get_client, create_client, update_client, delete_client
 from app.services.positioning import generate_positioning
 from app.services.cv_intelligence import analyse_cv
 from app.services.market_radar import run_market_radar
@@ -132,6 +132,13 @@ def put_client(client_id: str, body: UpdateClientRequest):
     record.profile = body.profile
     updated = update_client(record)
     return JSONResponse(status_code=200, content=updated.model_dump(mode="json"))
+
+
+@app.delete("/clients/{client_id}")
+def delete_client_by_id(client_id: str):
+    if not delete_client(client_id):
+        raise HTTPException(status_code=404, detail="Client not found.")
+    return JSONResponse(status_code=200, content={"deleted": True})
 
 
 @app.post("/clients/{client_id}/analyse-cv")

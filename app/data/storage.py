@@ -68,3 +68,12 @@ def update_client(record: ClientRecord) -> ClientRecord:
             _write_all(records)
             return record
     raise KeyError(f"Client {record.id} not found")
+
+
+def delete_client(client_id: str) -> bool:
+    records = _read_all()
+    filtered = [r for r in records if r.get("id") != client_id]
+    if len(filtered) == len(records):
+        return False
+    _write_all(filtered)
+    return True
