@@ -24,6 +24,33 @@ logger = logging.getLogger(__name__)
 
 _MODEL: str = os.getenv("CV_INTELLIGENCE_MODEL", "claude-haiku-4-5-20251001")
 
+
+# ── Anthropic error classifier ────────────────────────────────────────────────
+
+def _classify_anthropic_error(exc: Exception) -> str:
+    """
+    Map Anthropic SDK exception types to user-facing error strings.
+    Never includes the API key or any secret material.
+    """
+    try:
+        import anthropic as _ant  # noqa: PLC0415
+        if isinstance(exc, _ant.AuthenticationError):
+            return (
+                "Anthropic authentication failed — ANTHROPIC_API_KEY on Railway "
+                "is missing or invalid"
+            )
+        if isinstance(exc, _ant.RateLimitError):
+            return "Anthropic rate limit or credit limit reached"
+        if isinstance(exc, _ant.APIConnectionError):
+            return "Anthropic API connection failed from Railway (network or DNS)"
+        if isinstance(exc, _ant.APITimeoutError):
+            return "Anthropic API request timed out from Railway"
+        if isinstance(exc, _ant.APIStatusError):
+            return f"Anthropic API returned HTTP {exc.status_code}"
+    except ImportError:
+        pass
+    return f"{type(exc).__name__}: {exc}"
+
 # Truncate very long CVs before they inflate the response.
 _CV_MAX_WORDS = 1200
 
@@ -294,6 +321,21 @@ def analyse_cv(profile: ClientProfile) -> CVAnalysisResult:
     except ImportError as exc:
         raise RuntimeError("anthropic SDK not installed — add it to requirements.txt") from exc
 
+    # ── Preflight: API key presence and basic shape ──────────────────────────
+    api_key = os.getenv("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise RuntimeError(
+            "ANTHROPIC_API_KEY is not set — add it to Railway environment variables"
+        )
+    if api_key.startswith("sk-ant-"):
+        logger.info("cv_intelligence: ANTHROPIC_API_KEY present, prefix ok (sk-ant-...)")
+    else:
+        logger.warning(
+            "cv_intelligence: ANTHROPIC_API_KEY is set but does not start with 'sk-ant-' "
+            "(len=%d) — key may be invalid or copied incorrectly",
+            len(api_key),
+        )
+
     if not profile.cv_text or not profile.cv_text.strip():
         raise ValueError("No CV text found. Save CV text in the Profile tab first.")
 
@@ -314,7 +356,10 @@ def analyse_cv(profile: ClientProfile) -> CVAnalysisResult:
             return CVAnalysisResult(intelligence=intelligence, parse_failed=False)
         logger.warning("cv_intelligence: tool use returned no block, falling back to markdown")
     except Exception as exc:
-        logger.warning("cv_intelligence: tool use failed (%s), falling back to markdown", exc)
+        logger.warning(
+            "cv_intelligence: tool use failed [%s: %s], falling back to markdown",
+            type(exc).__name__, exc,
+        )
 
     # ── Fallback: structured markdown ────────────────────────────────────────
     try:
@@ -322,8 +367,9 @@ def analyse_cv(profile: ClientProfile) -> CVAnalysisResult:
         logger.info("cv_intelligence: markdown fallback succeeded (%d chars)", len(raw_text))
         return CVAnalysisResult(raw_text=raw_text, parse_failed=True)
     except Exception as exc:
-        logger.error("cv_intelligence: markdown fallback also failed: %s", exc)
-        raise RuntimeError(
-            "CV analysis failed on both structured and fallback paths. "
-            f"Last error: {exc}"
-        ) from exc
+        user_msg = _classify_anthropic_error(exc)
+        logger.error(
+            "cv_intelligence: markdown fallback also failed [%s: %s]",
+            type(exc).__name__, exc,
+        )
+        raise RuntimeError(user_msg) from exc
