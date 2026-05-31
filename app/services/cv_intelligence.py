@@ -346,20 +346,43 @@ def analyse_cv(profile: ClientProfile) -> CVAnalysisResult:
 
     cv_text = _truncate_cv(profile.cv_text.strip())
     desired_next_move = profile.desired_next_move.strip() or "Not specified"
-    client = anthropic.Anthropic()
+    client = anthropic.Anthropic(
+        timeout=anthropic.Timeout(connect=30.0, read=600.0, write=600.0, pool=600.0)
+    )
 
-    # ── Primary: tool use ────────────────────────────────────────────────────
-    try:
-        intelligence = _call_tool_use(client, cv_text, desired_next_move)
-        if intelligence is not None:
-            logger.info("cv_intelligence: tool use succeeded")
-            return CVAnalysisResult(intelligence=intelligence, parse_failed=False)
-        logger.warning("cv_intelligence: tool use returned no block, falling back to markdown")
-    except Exception as exc:
-        logger.warning(
-            "cv_intelligence: tool use failed [%s: %s], falling back to markdown",
-            type(exc).__name__, exc,
-        )
+    # ── Primary: tool use, one retry on transient network errors ─────────────
+    _TRANSIENT = (anthropic.APIConnectionError, anthropic.APITimeoutError)
+
+    for attempt in range(1, 3):
+        try:
+            intelligence = _call_tool_use(client, cv_text, desired_next_move)
+            if intelligence is not None:
+                logger.info("cv_intelligence: tool use succeeded (attempt %d)", attempt)
+                return CVAnalysisResult(intelligence=intelligence, parse_failed=False)
+            # Response arrived but contained no tool_use block — not a transient issue
+            logger.warning(
+                "cv_intelligence: tool use returned no block (attempt %d); falling back to markdown",
+                attempt,
+            )
+            break
+        except _TRANSIENT as exc:
+            if attempt == 1:
+                logger.warning(
+                    "cv_intelligence: transient error attempt %d [%s: %s] — retrying",
+                    attempt, type(exc).__name__, exc,
+                )
+                continue
+            logger.warning(
+                "cv_intelligence: transient error attempt %d [%s: %s] — falling back to markdown",
+                attempt, type(exc).__name__, exc,
+            )
+        except Exception as exc:
+            # Auth failures, rate limits, bad requests — do not retry
+            logger.warning(
+                "cv_intelligence: non-transient error attempt %d [%s: %s] — falling back to markdown",
+                attempt, type(exc).__name__, exc,
+            )
+            break
 
     # ── Fallback: structured markdown ────────────────────────────────────────
     try:
