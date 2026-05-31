@@ -144,12 +144,16 @@ export default function CVStudioTab({ client, onUpdate }) {
             </>
           )}
 
-          <div className="os-section-title">Experience Profile</div>
-          <div className="os-list-grid">
-            <ListCard label="Core Capabilities" items={intel.core_capabilities} />
-            <ListCard label="Sector Experience" items={intel.sector_experience} />
-            <ListCard label="Role Patterns"     items={intel.role_patterns} />
-          </div>
+          {(intel.core_capabilities?.length > 0 || intel.sector_experience?.length > 0 || intel.role_patterns?.length > 0) && (
+            <>
+              <div className="os-section-title">Experience Profile</div>
+              <div className="os-list-grid">
+                <ListCard label="Core Capabilities" items={intel.core_capabilities} />
+                <ListCard label="Sector Experience" items={intel.sector_experience} />
+                <ListCard label="Role Patterns"     items={intel.role_patterns} />
+              </div>
+            </>
+          )}
 
           {(intel.commercial_strengths?.length > 0 || intel.transformation_strengths?.length > 0) && (
             <>

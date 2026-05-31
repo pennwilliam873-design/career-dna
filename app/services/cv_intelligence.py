@@ -164,6 +164,58 @@ class CVAnalysisResult:
     parse_failed: bool = False
 
 
+# ── Completeness check ────────────────────────────────────────────────────────
+
+_MIN_DOWNSTREAM = 3  # number of downstream sections that must be populated
+
+
+def _check_completeness(intel: CVIntelligence) -> tuple[bool, list[str]]:
+    """
+    Validates that a structured CVIntelligence result is substantive enough
+    to show in the UI.  Returns (True, []) on pass, (False, [missing]) on fail.
+
+    Requirements:
+    - executive_summary must be non-empty
+    - career_arc must be non-empty
+    - at least _MIN_DOWNSTREAM of the 11 downstream fields must be populated
+    """
+    missing: list[str] = []
+
+    if not intel.executive_summary:
+        missing.append("executive_summary")
+    if not intel.career_arc:
+        missing.append("career_arc")
+
+    scale = intel.leadership_scale
+    downstream: dict[str, bool] = {
+        "core_capabilities":              bool(intel.core_capabilities),
+        "signature_achievements":         bool(intel.signature_achievements),
+        "leadership_scale":               bool(
+                                              scale and (
+                                                  scale.team_size or scale.revenue_or_pnl
+                                                  or scale.geography or scale.stakeholders
+                                              )
+                                          ),
+        "sector_experience":              bool(intel.sector_experience),
+        "role_patterns":                  bool(intel.role_patterns),
+        "commercial_strengths":           bool(intel.commercial_strengths),
+        "transformation_strengths":       bool(intel.transformation_strengths),
+        "evidence_gaps":                  bool(intel.evidence_gaps),
+        "under_positioned_assets":        bool(intel.under_positioned_assets),
+        "cv_improvement_recommendations": bool(intel.cv_improvement_recommendations),
+        "advisor_only_notes":             bool(intel.advisor_only_notes),
+    }
+
+    empty_downstream = [k for k, v in downstream.items() if not v]
+    populated_count  = sum(1 for v in downstream.values() if v)
+
+    if missing or populated_count < _MIN_DOWNSTREAM:
+        missing.extend(empty_downstream)
+        return False, missing
+
+    return True, []
+
+
 # ── CV truncation ─────────────────────────────────────────────────────────────
 
 def _truncate_cv(text: str) -> str:
@@ -391,8 +443,16 @@ def analyse_cv(profile: ClientProfile) -> CVAnalysisResult:
         try:
             intelligence = _call_tool_use(client, cv_text, desired_next_move)
             if intelligence is not None:
-                logger.info("cv_intelligence: tool use succeeded (attempt %d)", attempt)
-                return CVAnalysisResult(intelligence=intelligence, parse_failed=False)
+                ok, missing = _check_completeness(intelligence)
+                if ok:
+                    logger.info("cv_intelligence: tool use succeeded (attempt %d)", attempt)
+                    return CVAnalysisResult(intelligence=intelligence, parse_failed=False)
+                logger.warning(
+                    "cv_intelligence: structured output too sparse (attempt %d) — "
+                    "empty fields: %s — falling back to markdown",
+                    attempt, ", ".join(missing),
+                )
+                break  # sparse output is not a transient error; retry won't help
             # Response arrived but contained no tool_use block — not a transient issue
             logger.warning(
                 "cv_intelligence: tool use returned no block (attempt %d); falling back to markdown",
