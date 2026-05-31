@@ -13,6 +13,7 @@ Fallback path — sectioned markdown.
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 from dataclasses import dataclass, field
@@ -206,7 +207,34 @@ def _call_tool_use(client, cv_text: str, desired_next_move: str) -> Optional[CVI
         logger.warning("cv_intelligence: tool use response contained no tool_use block; stop_reason=%s", response.stop_reason)
         return None
 
-    data = tool_block.input  # already a Python dict — no JSON parsing needed
+    raw_input = tool_block.input
+    logger.debug(
+        "cv_intelligence: tool_use input type=%s", type(raw_input).__name__
+    )
+
+    if isinstance(raw_input, dict):
+        data = raw_input
+    elif isinstance(raw_input, str):
+        logger.warning(
+            "cv_intelligence: tool_use input arrived as str (len=%d) — attempting json.loads",
+            len(raw_input),
+        )
+        try:
+            parsed = json.loads(raw_input)
+        except (json.JSONDecodeError, ValueError) as exc:
+            raise ValueError(
+                f"tool_use input was a string but json.loads failed: {exc}"
+            ) from exc
+        if not isinstance(parsed, dict):
+            raise ValueError(
+                f"tool_use input string parsed to {type(parsed).__name__}, expected dict"
+            )
+        logger.info("cv_intelligence: tool_use input parsed from string to dict successfully")
+        data = parsed
+    else:
+        raise ValueError(
+            f"tool_use input has unexpected type {type(raw_input).__name__}, expected dict"
+        )
 
     scale = data.get("leadership_scale") or {}
     leadership_scale = LeadershipScale(
