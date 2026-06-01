@@ -6,6 +6,7 @@ import CVStudioTab from './tabs/CVStudioTab'
 import PositioningTab from './tabs/PositioningTab'
 import MarketRadarTab from './tabs/MarketRadarTab'
 import OpportunitiesTab from './tabs/OpportunitiesTab'
+import NotesActionsTab from './tabs/NotesActionsTab'
 import AdvisorBriefTab from './tabs/AdvisorBriefTab'
 import ComingSoon from './tabs/ComingSoon'
 
@@ -15,6 +16,7 @@ const TABS = [
   { key: 'positioning',   label: 'Positioning',     live: true  },
   { key: 'radar',         label: 'Market Radar',    live: true  },
   { key: 'opportunities', label: 'Opportunities',   live: true  },
+  { key: 'notes',         label: 'Notes & Actions', live: true  },
   { key: 'brief',         label: 'Advisor Brief',   live: true  },
   { key: 'report',        label: 'Client Report',   live: false },
 ]
@@ -27,6 +29,7 @@ const STATUS_STEPS = [
   { label: 'Positioning', check: c => Boolean(c.positioning) },
   { label: 'Radar',       check: c => Boolean(c.market_radar || c.market_radar_raw) },
   { label: 'Opps',        check: c => Boolean(c.opportunities?.length) },
+  { label: 'Notes',       check: c => Boolean(c.session_notes?.length || c.action_items?.length) },
   { label: 'Brief',       check: c => Boolean(c.advisor_brief || c.advisor_brief_raw) },
 ]
 
@@ -124,6 +127,9 @@ export default function ClientWorkspace() {
             )}
             {activeTab === 'opportunities' && (
               <OpportunitiesTab client={client} onUpdate={setClient} />
+            )}
+            {activeTab === 'notes' && (
+              <NotesActionsTab client={client} onUpdate={setClient} />
             )}
             {activeTab === 'brief' && (
               <AdvisorBriefTab client={client} onUpdate={setClient} />

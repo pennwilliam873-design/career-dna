@@ -18,6 +18,7 @@ from app.schemas import RawInput
 from app.models.client import (
     ClientRecord, ClientProfile, CreateClientRequest, UpdateClientRequest,
     MarketRadarRequest, Opportunity, OpportunityRequest,
+    SessionNote, ActionItem, SessionNoteRequest, ActionItemRequest,
 )
 from app.data.storage import list_clients, get_client, create_client, update_client, delete_client
 from app.services.positioning import generate_positioning
@@ -296,6 +297,104 @@ def delete_opportunity(client_id: str, opp_id: str):
     record.opportunities = [o for o in record.opportunities if o.id != opp_id]
     if len(record.opportunities) == before:
         raise HTTPException(status_code=404, detail="Opportunity not found.")
+    updated = update_client(record)
+    return JSONResponse(status_code=200, content=updated.model_dump(mode="json"))
+
+
+# ── Session Note endpoints ───────────────────────────────────────────────────
+
+
+@app.post("/clients/{client_id}/notes")
+def post_create_note(client_id: str, body: SessionNoteRequest):
+    record = get_client(client_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Client not found.")
+    note = SessionNote(
+        date=body.date, title=body.title,
+        notes=body.notes, advisor_only=body.advisor_only,
+    )
+    record.session_notes.append(note)
+    updated = update_client(record)
+    return JSONResponse(status_code=201, content=updated.model_dump(mode="json"))
+
+
+@app.put("/clients/{client_id}/notes/{note_id}")
+def put_note(client_id: str, note_id: str, body: SessionNoteRequest):
+    record = get_client(client_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Client not found.")
+    note = next((n for n in record.session_notes if n.id == note_id), None)
+    if note is None:
+        raise HTTPException(status_code=404, detail="Note not found.")
+    note.date = body.date
+    note.title = body.title
+    note.notes = body.notes
+    note.advisor_only = body.advisor_only
+    note.updated_at = datetime.now(timezone.utc).isoformat()
+    updated = update_client(record)
+    return JSONResponse(status_code=200, content=updated.model_dump(mode="json"))
+
+
+@app.delete("/clients/{client_id}/notes/{note_id}")
+def delete_note(client_id: str, note_id: str):
+    record = get_client(client_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Client not found.")
+    before = len(record.session_notes)
+    record.session_notes = [n for n in record.session_notes if n.id != note_id]
+    if len(record.session_notes) == before:
+        raise HTTPException(status_code=404, detail="Note not found.")
+    updated = update_client(record)
+    return JSONResponse(status_code=200, content=updated.model_dump(mode="json"))
+
+
+# ── Action Item endpoints ─────────────────────────────────────────────────────
+
+
+@app.post("/clients/{client_id}/actions")
+def post_create_action(client_id: str, body: ActionItemRequest):
+    record = get_client(client_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Client not found.")
+    action = ActionItem(
+        action=body.action, owner=body.owner,
+        due_date=body.due_date, status=body.status,
+        related_opportunity=body.related_opportunity,
+        advisor_note=body.advisor_note,
+    )
+    record.action_items.append(action)
+    updated = update_client(record)
+    return JSONResponse(status_code=201, content=updated.model_dump(mode="json"))
+
+
+@app.put("/clients/{client_id}/actions/{action_id}")
+def put_action(client_id: str, action_id: str, body: ActionItemRequest):
+    record = get_client(client_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Client not found.")
+    action = next((a for a in record.action_items if a.id == action_id), None)
+    if action is None:
+        raise HTTPException(status_code=404, detail="Action item not found.")
+    action.action = body.action
+    action.owner = body.owner
+    action.due_date = body.due_date
+    action.status = body.status
+    action.related_opportunity = body.related_opportunity
+    action.advisor_note = body.advisor_note
+    action.updated_at = datetime.now(timezone.utc).isoformat()
+    updated = update_client(record)
+    return JSONResponse(status_code=200, content=updated.model_dump(mode="json"))
+
+
+@app.delete("/clients/{client_id}/actions/{action_id}")
+def delete_action(client_id: str, action_id: str):
+    record = get_client(client_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Client not found.")
+    before = len(record.action_items)
+    record.action_items = [a for a in record.action_items if a.id != action_id]
+    if len(record.action_items) == before:
+        raise HTTPException(status_code=404, detail="Action item not found.")
     updated = update_client(record)
     return JSONResponse(status_code=200, content=updated.model_dump(mode="json"))
 

@@ -165,6 +165,28 @@ class AdvisorBrief(BaseModel):
     advisor_only_notes: List[str] = Field(default_factory=list)
 
 
+class SessionNote(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    date: str = ""
+    title: str = ""
+    notes: str = ""
+    advisor_only: bool = False
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class ActionItem(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    action: str = ""
+    owner: str = "Advisor"          # "Advisor" | "Client" | "Both"
+    due_date: str = ""
+    status: str = "To do"           # "To do" | "In progress" | "Done" | "Parked"
+    related_opportunity: str = ""
+    advisor_note: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
 class ClientRecord(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     created_at: str = Field(
@@ -186,6 +208,8 @@ class ClientRecord(BaseModel):
     market_radar_is_complete: Optional[bool] = None
     market_radar_scan_warning: Optional[str] = None
     opportunities: List[Opportunity] = Field(default_factory=list)
+    session_notes: List[SessionNote] = Field(default_factory=list)
+    action_items:  List[ActionItem]  = Field(default_factory=list)
     advisor_brief: Optional[AdvisorBrief] = None
     advisor_brief_raw: Optional[str] = None
     advisor_brief_generated_at: Optional[str] = None
@@ -218,3 +242,19 @@ class OpportunityRequest(BaseModel):
     next_action: str = ""
     advisor_note: str = ""
     sources: List[RadarSource] = Field(default_factory=list)
+
+
+class SessionNoteRequest(BaseModel):
+    date: str = ""
+    title: str = ""
+    notes: str = ""
+    advisor_only: bool = False
+
+
+class ActionItemRequest(BaseModel):
+    action: str = ""
+    owner: str = "Advisor"
+    due_date: str = ""
+    status: str = "To do"
+    related_opportunity: str = ""
+    advisor_note: str = ""

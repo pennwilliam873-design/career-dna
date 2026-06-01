@@ -262,6 +262,56 @@ def _opportunities_block(record: ClientRecord) -> str:
     return "\n".join(lines)
 
 
+def _notes_block(record: ClientRecord) -> str:
+    notes   = record.session_notes or []
+    actions = record.action_items  or []
+
+    if not notes and not actions:
+        return "[NOTES & ACTIONS]\nNo session notes or action items recorded."
+
+    lines = ["[NOTES & ACTIONS]"]
+
+    if notes:
+        sorted_notes = sorted(notes, key=lambda n: n.date or "", reverse=True)
+        lines.append("\nSession Notes (most recent first, up to 5):")
+        for note in sorted_notes[:5]:
+            header = f"  [{note.date or 'No date'}]"
+            if note.title:
+                header += f" {note.title}"
+            if note.advisor_only:
+                header += " [ADVISOR ONLY]"
+            lines.append(header)
+            if note.notes:
+                text = note.notes.strip()
+                if len(text) > 400:
+                    text = text[:400] + "…"
+                lines.append(f"    {text}")
+
+    if actions:
+        open_actions   = [a for a in actions if a.status not in ("Done", "Parked")]
+        closed_actions = [a for a in actions if a.status in ("Done", "Parked")]
+
+        if open_actions:
+            lines.append("\nOpen Action Items:")
+            for a in open_actions:
+                line = f"  [{a.owner}] {a.action}"
+                if a.due_date:
+                    line += f" (due {a.due_date})"
+                line += f" — {a.status}"
+                lines.append(line)
+                if a.related_opportunity:
+                    lines.append(f"    Re: {a.related_opportunity}")
+                if a.advisor_note:
+                    lines.append(f"    Note: {a.advisor_note}")
+
+        if closed_actions:
+            lines.append(f"\nCompleted/Parked: {len(closed_actions)} item(s)")
+            for a in closed_actions[:3]:
+                lines.append(f"  [{a.owner}] {a.action} — {a.status}")
+
+    return "\n".join(lines)
+
+
 def _build_context(record: ClientRecord) -> str:
     return "\n\n".join([
         _profile_block(record),
@@ -269,6 +319,7 @@ def _build_context(record: ClientRecord) -> str:
         _positioning_block(record),
         _radar_digest(record),
         _opportunities_block(record),
+        _notes_block(record),
     ])
 
 
