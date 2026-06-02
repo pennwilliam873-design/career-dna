@@ -196,6 +196,7 @@ export default function OpportunitiesTab({ client, onUpdate }) {
 // ── OpportunityCard ───────────────────────────────────────────────────────────
 
 function OpportunityCard({ opp, onEdit, onDelete }) {
+  const [showDetails, setShowDetails] = useState(false)
   const [showSources, setShowSources] = useState(false)
 
   const priCls =
@@ -208,90 +209,127 @@ function OpportunityCard({ opp, onEdit, onDelete }) {
     opp.confidence === 'inferred'  ? 'os-confidence-badge--inferred'  :
                                      'os-confidence-badge--hypothesis'
 
+  const hasSecondary = !!(opp.evidence || opp.relationship_route || opp.advisor_note || opp.sources?.length)
+  const hasSubheader = !!(opp.company || opp.confidence || (opp.source_type === 'market_radar' && opp.source_section))
+
   return (
-    <div className="os-opp-card">
-      {/* Header */}
-      <div className="os-opp-card-header">
+    <div className="os-opp-card" style={{ gap: 0, padding: '12px 16px' }}>
+
+      {/* ── Header: title + priority badge + Edit + Delete ─────────────── */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: hasSubheader ? 4 : 8 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginBottom: 2 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             {opp.priority && <span className={`os-priority-badge ${priCls}`}>{opp.priority}</span>}
             <p className="os-opp-card-title" style={{ margin: 0 }}>{opp.title || '(Untitled)'}</p>
           </div>
-          {opp.company && <p className="os-opp-card-company">{opp.company}</p>}
         </div>
-        {opp.confidence && (
-          <span className={`os-confidence-badge ${confCls}`}>{opp.confidence}</span>
-        )}
+        <div style={{ display: 'flex', gap: 5, flexShrink: 0, alignItems: 'center' }}>
+          <button
+            className="os-btn os-btn--secondary os-btn--sm"
+            onClick={onEdit}
+            style={{ padding: '3px 10px' }}
+          >
+            Edit
+          </button>
+          <button
+            className="os-btn os-btn--danger os-btn--sm os-opp-delete-btn"
+            onClick={onDelete}
+            style={{ padding: '3px 10px' }}
+          >
+            ×
+          </button>
+        </div>
       </div>
 
-      {/* Fit rationale */}
+      {/* ── Sub-header: company · confidence · source tag ──────────────── */}
+      {hasSubheader && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+          {opp.company && (
+            <span style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>{opp.company}</span>
+          )}
+          {opp.confidence && (
+            <span className={`os-confidence-badge ${confCls}`}>{opp.confidence}</span>
+          )}
+          {opp.source_type === 'market_radar' && opp.source_section && (
+            <span style={{ fontSize: 10, color: '#94a3b8', fontStyle: 'italic' }}>
+              from Market Radar · {opp.source_section.replace(/_/g, ' ')}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* ── Fit rationale — always visible ──────────────────────────────── */}
       {opp.fit_rationale && (
-        <p className="os-opp-field-value">{opp.fit_rationale}</p>
-      )}
-
-      {/* Evidence */}
-      {opp.evidence && (
-        <p className="os-opp-field-value" style={{ color: '#64748b', fontSize: 12 }}>
-          {opp.evidence}
+        <p className="os-opp-field-value" style={{ marginBottom: 0 }}>
+          {opp.fit_rationale}
         </p>
       )}
 
-      {/* Meta / Next action */}
-      {opp.relationship_route && (
-        <p className="os-opp-meta-item">
-          <span className="os-opp-meta-label">Route</span>
-          {opp.relationship_route}
-        </p>
-      )}
+      {/* ── Next action — elevated strip, always visible ─────────────────── */}
       {opp.next_action && (
-        <div className="os-opp-next-action">
+        <div className="os-opp-next-action" style={{ marginTop: 8 }}>
           <span className="os-opp-meta-label">Next Action</span>
           <span className="os-opp-next-action-text">{opp.next_action}</span>
         </div>
       )}
 
-      {/* Advisor note */}
-      {opp.advisor_note && (
-        <p className="os-opp-advisor-note">{opp.advisor_note}</p>
-      )}
-
-      {/* Sources */}
-      {opp.sources?.length > 0 && (
-        <div className="os-item-sources">
+      {/* ── Secondary details — collapsed by default ────────────────────── */}
+      {hasSecondary && (
+        <div style={{ marginTop: 8 }}>
           <button
             className="os-opp-sources-toggle"
-            onClick={() => setShowSources(v => !v)}
+            onClick={() => setShowDetails(v => !v)}
           >
-            {showSources ? '▾' : '▸'} {opp.sources.length} source{opp.sources.length > 1 ? 's' : ''}
+            {showDetails ? '▾ Less' : '▸ Details'}
           </button>
-          {showSources && opp.sources.map((src, i) => (
-            <div key={i} className="os-item-source">
-              <span className="os-item-source-num">[{i + 1}]</span>
-              {src.url ? (
-                <a className="os-source-link" href={src.url} target="_blank" rel="noopener noreferrer"
-                   title={src.snippet || src.title}>
-                  {src.title || src.url}
-                </a>
-              ) : (
-                <span className="os-item-source-title">{src.title || src.snippet}</span>
+
+          {showDetails && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginTop: 6 }}>
+              {opp.evidence && (
+                <p style={{ fontSize: 12, color: '#64748b', lineHeight: 1.45, margin: 0 }}>
+                  <span className="os-opp-meta-label">Evidence</span>
+                  {opp.evidence}
+                </p>
+              )}
+              {opp.relationship_route && (
+                <p style={{ fontSize: 12, color: '#475569', lineHeight: 1.45, margin: 0 }}>
+                  <span className="os-opp-meta-label">Route</span>
+                  {opp.relationship_route}
+                </p>
+              )}
+              {opp.advisor_note && (
+                <p className="os-opp-advisor-note" style={{ fontSize: 11, padding: '3px 8px' }}>
+                  {opp.advisor_note}
+                </p>
+              )}
+              {opp.sources?.length > 0 && (
+                <div>
+                  <button
+                    className="os-opp-sources-toggle"
+                    onClick={() => setShowSources(v => !v)}
+                  >
+                    {showSources ? '▾' : '▸'} {opp.sources.length} source{opp.sources.length > 1 ? 's' : ''}
+                  </button>
+                  {showSources && opp.sources.map((src, i) => (
+                    <div key={i} className="os-item-source" style={{ marginTop: 3 }}>
+                      <span className="os-item-source-num">[{i + 1}]</span>
+                      {src.url ? (
+                        <a className="os-source-link" href={src.url} target="_blank" rel="noopener noreferrer"
+                           title={src.snippet || src.title}>
+                          {src.title || src.url}
+                        </a>
+                      ) : (
+                        <span className="os-item-source-title">{src.title || src.snippet}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
-          ))}
+          )}
         </div>
       )}
 
-      {/* Source tag */}
-      {opp.source_type === 'market_radar' && opp.source_section && (
-        <p className="os-opp-source-tag">
-          From Market Radar · {opp.source_section.replace(/_/g, ' ')}
-        </p>
-      )}
-
-      {/* Actions */}
-      <div className="os-opp-card-actions">
-        <button className="os-btn os-btn--secondary os-btn--sm" onClick={onEdit}>Edit</button>
-        <button className="os-btn os-btn--danger os-btn--sm os-opp-delete-btn" onClick={onDelete}>Delete</button>
-      </div>
     </div>
   )
 }

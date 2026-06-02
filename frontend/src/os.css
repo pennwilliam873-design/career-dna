@@ -1004,11 +1004,8 @@ body {
 /* Opportunity cards grid */
 .os-opp-cards {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-}
-@media (max-width: 640px) {
-  .os-opp-cards { grid-template-columns: 1fr; }
+  grid-template-columns: 1fr;
+  gap: 8px;
 }
 
 /* Opportunity card */
