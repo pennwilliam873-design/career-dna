@@ -1,5 +1,9 @@
-const PROXY_BASE  = '/api'
-const DIRECT_BASE = import.meta.env.VITE_BACKEND_URL  // Railway URL, set on Vercel only
+const PROXY_BASE    = '/api'
+const RAILWAY_URL   = 'https://career-dna-production.up.railway.app'
+// VITE_BACKEND_URL overrides the hardcoded URL if set in Vercel env vars.
+// Falls back to RAILWAY_URL in production, or null in local dev (where PROD=false
+// and the Vite proxy forwards /api/clients/* to localhost:8000).
+const DIRECT_BASE = import.meta.env.VITE_BACKEND_URL || (import.meta.env.PROD ? RAILWAY_URL : null)
 
 async function req(method, path, body, direct = false) {
   // When VITE_BACKEND_URL is set and the call is marked direct,
