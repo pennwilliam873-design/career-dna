@@ -56,7 +56,7 @@ _COMPLETENESS_MIN: Dict[str, int] = {
     "priority_pathways":        3,
     "tier1_companies":          5,
     "tier2_companies":          8,
-    "tier3_companies":          8,
+    "tier3_companies":          6,   # relaxed: profile_only + exclusion list limits breadth
     "market_signals":           5,
     "hidden_market_hypotheses": 3,
     "relationship_strategy":    3,
@@ -70,9 +70,9 @@ _SECTION_MAX_TOKENS: Dict[str, int] = {
     "priority_pathways":        1024,
     "tier1_companies":          3072,
     "tier2_companies":          3072,
-    "tier3_companies":          2048,
+    "tier3_companies":          3072,  # raised: prevents truncation on longer watchlists
     "market_signals":           2048,
-    "hidden_market_hypotheses": 1024,
+    "hidden_market_hypotheses": 2048,  # raised: 1024 was too tight for 3-5 detailed items
     "relationship_strategy":    1024,
     "next_research_actions":     512,
     "advisor_only_notes":        512,
@@ -486,15 +486,15 @@ _SECTION_INSTRUCTIONS: Dict[str, str] = {
         "Name real companies. Minimum 10 items."
     ),
     "tier3_companies": (
-        "Generate tier3_companies: 10-25 exploratory watchlist companies for broader market "
-        "coverage. These should be DIFFERENT companies — speculative opportunities, more "
-        "distant adjacencies, or companies worth monitoring but not yet actively targeting. "
+        "Generate tier3_companies: 6-15 exploratory watchlist companies for broader market "
+        "coverage. These should be DIFFERENT companies — speculative opportunities, sector "
+        "adjacencies, or companies worth monitoring but not yet actively targeting. "
         "Keep entries brief — this is a watchlist, not a detailed analysis. "
         "Do NOT invent hiring signals; confidence must be 'inferred' or 'hypothesis' only. "
         "Each needs: company name, category, "
         "why_it_may_be_relevant (brief rationale ≤15 words), "
         "confidence (inferred or hypothesis), notes (optional note ≤15 words or empty string). "
-        "Name real companies. Minimum 10 items."
+        "Name real companies. Minimum 6 items."
     ),
     "market_signals": (
         "Generate market_signals: 5-8 specific market signals relevant to this client's "
@@ -593,7 +593,7 @@ def _format_sources_block(source_map: Dict[str, dict], manual_block: str) -> str
     if not parts:
         return (
             "[No external research — generate all items from client profile and "
-            "positioning context only. All market_signal confidence values must be 'hypothesis'.]"
+            "positioning context only. For market_signals, confidence must be 'hypothesis'.]"
         )
 
     return "\n".join(parts)
@@ -969,8 +969,9 @@ def _build_section_prompt(
             "explicitly the research supports each claim."
         ),
         "profile_only": (
-            "No external research is available. All market_signal confidence values must "
-            "be 'hypothesis'. Provide your best advisory reasoning from the client context."
+            "No external research is available. For market_signals specifically, all "
+            "confidence values must be 'hypothesis'. For all other sections, use your best "
+            "advisory reasoning from the client profile and career context."
         ),
     }[mode]
 
