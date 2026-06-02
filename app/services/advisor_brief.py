@@ -179,15 +179,10 @@ def _radar_digest(record: ClientRecord) -> str:
     if radar.market_summary:
         parts.append(f"Summary: {radar.market_summary}")
 
-    # Top companies — High priority first, up to 5
-    companies = [c for c in radar.target_companies if c.company]
-    companies_sorted = sorted(
-        companies,
-        key=lambda c: {"High": 0, "Medium": 1, "Low": 2}.get(c.priority, 1),
-    )[:5]
-    if companies_sorted:
-        parts.append("Target Companies:")
-        for c in companies_sorted:
+    # Tiered company map — use new structure if available, fall back to legacy flat list
+    if radar.tier1_companies:
+        parts.append("Tier 1 Priority Targets:")
+        for c in radar.tier1_companies[:8]:
             line = f"  - {c.company}"
             if c.category:
                 line += f" ({c.category})"
@@ -195,7 +190,42 @@ def _radar_digest(record: ClientRecord) -> str:
                 line += f" — {c.signal_or_trigger}"
             if c.priority:
                 line += f" [{c.priority}]"
+            if c.confidence:
+                line += f" [{c.confidence}]"
             parts.append(line)
+            if c.advisor_angle:
+                parts.append(f"    Advisor angle: {c.advisor_angle}")
+        if radar.tier2_companies:
+            t2_sorted = sorted(
+                radar.tier2_companies,
+                key=lambda c: {"High": 0, "Medium": 1, "Low": 2}.get(c.priority, 1),
+            )[:5]
+            parts.append("Tier 2 Strongest Picks:")
+            for c in t2_sorted:
+                line = f"  - {c.company}"
+                if c.likely_role_angle:
+                    line += f" — {c.likely_role_angle}"
+                if c.priority:
+                    line += f" [{c.priority}]"
+                parts.append(line)
+    else:
+        # Backward compat: legacy flat target_companies on old records
+        companies = [c for c in radar.target_companies if c.company]
+        companies_sorted = sorted(
+            companies,
+            key=lambda c: {"High": 0, "Medium": 1, "Low": 2}.get(c.priority, 1),
+        )[:5]
+        if companies_sorted:
+            parts.append("Target Companies:")
+            for c in companies_sorted:
+                line = f"  - {c.company}"
+                if c.category:
+                    line += f" ({c.category})"
+                if c.signal_or_trigger:
+                    line += f" — {c.signal_or_trigger}"
+                if c.priority:
+                    line += f" [{c.priority}]"
+                parts.append(line)
 
     # Verified and inferred signals only, up to 5
     signals = [

@@ -35,6 +35,9 @@ from app.models.client import (
     RadarSource,
     RelationshipStrategy,
     TargetCompany,
+    Tier1Company,
+    Tier2Company,
+    Tier3Company,
 )
 
 logger = logging.getLogger(__name__)
@@ -51,7 +54,9 @@ _RESULTS_PER_QUERY = 3
 # Minimum item counts for a section to be considered complete
 _COMPLETENESS_MIN: Dict[str, int] = {
     "priority_pathways":        3,
-    "target_companies":         5,
+    "tier1_companies":          5,
+    "tier2_companies":          8,
+    "tier3_companies":          8,
     "market_signals":           5,
     "hidden_market_hypotheses": 3,
     "relationship_strategy":    3,
@@ -63,7 +68,9 @@ _COMPLETENESS_MIN: Dict[str, int] = {
 _SECTION_MAX_TOKENS: Dict[str, int] = {
     "market_summary":            256,
     "priority_pathways":        1024,
-    "target_companies":         2048,
+    "tier1_companies":          3072,
+    "tier2_companies":          3072,
+    "tier3_companies":          2048,
     "market_signals":           2048,
     "hidden_market_hypotheses": 1024,
     "relationship_strategy":    1024,
@@ -74,7 +81,9 @@ _SECTION_MAX_TOKENS: Dict[str, int] = {
 _PIPELINE_SECTIONS = [
     "market_summary",
     "priority_pathways",
-    "target_companies",
+    "tier1_companies",
+    "tier2_companies",
+    "tier3_companies",
     "market_signals",
     "hidden_market_hypotheses",
     "relationship_strategy",
@@ -83,7 +92,7 @@ _PIPELINE_SECTIONS = [
 ]
 
 # Sections that carry item-level source attribution
-_SOURCED_SECTIONS = {"target_companies", "market_signals", "hidden_market_hypotheses"}
+_SOURCED_SECTIONS = {"tier1_companies", "tier2_companies", "market_signals", "hidden_market_hypotheses"}
 
 
 # ── Result container ──────────────────────────────────────────────────────────
@@ -182,6 +191,114 @@ _SECTION_TOOLS: Dict[str, dict] = {
                 }
             },
             "required": ["target_companies"],
+        },
+    },
+    "tier1_companies": {
+        "name": "submit_tier1_companies",
+        "description": "Submit 5-8 Tier 1 Priority Target companies with full detail and source IDs.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "tier1_companies": {
+                    "type": "array",
+                    "description": "5-8 highest-priority named companies for this client.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "company": {"type": "string", "description": "Real company name."},
+                            "category": {
+                                "type": "string",
+                                "description": "e.g. PE portfolio, listed, private, scale-up, NED target",
+                            },
+                            "why_relevant": {"type": "string", "description": "Specific fit rationale. Under 25 words."},
+                            "signal_or_trigger": {"type": "string", "description": "Event or signal making this timely. Under 20 words."},
+                            "entry_route": {"type": "string", "description": "How to approach. Under 20 words."},
+                            "advisor_angle": {"type": "string", "description": "Advisor-specific insight or talking point. Under 20 words."},
+                            "priority": {"type": "string", "enum": ["High", "Medium"]},
+                            "confidence": {"type": "string", "enum": ["verified", "inferred", "hypothesis"]},
+                            "sources": {
+                                "type": "array",
+                                "description": (
+                                    "Source IDs from the SOURCES block directly mentioning "
+                                    "this company. Empty array if none."
+                                ),
+                                "items": {"type": "string"},
+                            },
+                        },
+                        "required": [
+                            "company", "category", "why_relevant", "signal_or_trigger",
+                            "entry_route", "advisor_angle", "priority", "confidence", "sources",
+                        ],
+                    },
+                }
+            },
+            "required": ["tier1_companies"],
+        },
+    },
+    "tier2_companies": {
+        "name": "submit_tier2_companies",
+        "description": "Submit 10-15 Tier 2 Strong Adjacent Target companies (concise).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "tier2_companies": {
+                    "type": "array",
+                    "description": "10-15 credible adjacent companies — less urgent than Tier 1, more concise.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "company": {"type": "string", "description": "Real company name."},
+                            "category": {
+                                "type": "string",
+                                "description": "e.g. PE portfolio, listed, private, scale-up, NED target",
+                            },
+                            "why_relevant": {"type": "string", "description": "Under 20 words."},
+                            "likely_role_angle": {"type": "string", "description": "Likely function or role type. Under 15 words."},
+                            "trigger_or_rationale": {"type": "string", "description": "Why worth watching now. Under 20 words."},
+                            "priority": {"type": "string", "enum": ["High", "Medium", "Low"]},
+                            "confidence": {"type": "string", "enum": ["verified", "inferred", "hypothesis"]},
+                            "sources": {
+                                "type": "array",
+                                "description": "Source IDs if available. Empty array if none.",
+                                "items": {"type": "string"},
+                            },
+                        },
+                        "required": [
+                            "company", "category", "why_relevant", "likely_role_angle",
+                            "trigger_or_rationale", "priority", "confidence", "sources",
+                        ],
+                    },
+                }
+            },
+            "required": ["tier2_companies"],
+        },
+    },
+    "tier3_companies": {
+        "name": "submit_tier3_companies",
+        "description": "Submit 10-25 Tier 3 Exploratory / Watchlist companies (brief).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "tier3_companies": {
+                    "type": "array",
+                    "description": "10-25 watchlist companies — brief market-map coverage only.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "company": {"type": "string", "description": "Real company name."},
+                            "category": {
+                                "type": "string",
+                                "description": "e.g. PE portfolio, listed, private, scale-up, NED target",
+                            },
+                            "why_it_may_be_relevant": {"type": "string", "description": "Brief rationale. Under 15 words."},
+                            "confidence": {"type": "string", "enum": ["inferred", "hypothesis"]},
+                            "notes": {"type": "string", "description": "Optional brief note under 15 words. Empty string if nothing to add."},
+                        },
+                        "required": ["company", "category", "why_it_may_be_relevant", "confidence", "notes"],
+                    },
+                }
+            },
+            "required": ["tier3_companies"],
         },
     },
     "market_signals": {
@@ -344,13 +461,40 @@ _SECTION_INSTRUCTIONS: Dict[str, str] = {
         "(market evidence, ≤25 words), market_pull (forces making this timely, ≤20 words), "
         "fit_level (High/Medium/Stretch), watchouts (≤20 words). Minimum 3 items."
     ),
-    "target_companies": (
-        "Generate target_companies: 5-8 specific named companies worth monitoring or "
-        "approaching for this client. Each needs: company name, category (PE portfolio / "
-        "listed / private / scale-up / NED target), why_relevant (≤20 words), "
-        "signal_or_trigger (≤20 words), entry_route (≤20 words), priority (High/Medium/Low), "
-        "sources (source IDs from SOURCES that directly mention this company — empty array "
-        "if none). Name real companies. Minimum 5 items."
+    "tier1_companies": (
+        "Generate tier1_companies: the 5-8 highest-priority named companies for this client "
+        "to target. These must be the most relevant based on the client's background, desired "
+        "move, geography, and current market signals. Be selective — only the strongest "
+        "candidates belong here. Each needs: company name, category (PE portfolio / listed / "
+        "private / scale-up / NED target), why_relevant (specific fit rationale ≤25 words), "
+        "signal_or_trigger (event or signal making this timely ≤20 words), entry_route "
+        "(≤20 words), advisor_angle (specific insight for the advisor ≤20 words), "
+        "priority (High or Medium only — these are your best targets), "
+        "confidence (verified/inferred/hypothesis), "
+        "sources (source IDs directly mentioning this company — empty array if none). "
+        "Name real companies. Minimum 5 items."
+    ),
+    "tier2_companies": (
+        "Generate tier2_companies: 10-15 additional named companies that are credible targets "
+        "but less urgent or less well-matched than Tier 1. These should be DIFFERENT companies "
+        "— adjacent sector opportunities, slightly lower fit, or less time-sensitive signals. "
+        "Be more concise than Tier 1. Each needs: company name, category, "
+        "why_relevant (≤20 words), likely_role_angle (likely function or role type ≤15 words), "
+        "trigger_or_rationale (why worth monitoring now ≤20 words), "
+        "priority (High/Medium/Low), confidence (verified/inferred/hypothesis), "
+        "sources (source IDs if available — empty array if none). "
+        "Name real companies. Minimum 10 items."
+    ),
+    "tier3_companies": (
+        "Generate tier3_companies: 10-25 exploratory watchlist companies for broader market "
+        "coverage. These should be DIFFERENT companies — speculative opportunities, more "
+        "distant adjacencies, or companies worth monitoring but not yet actively targeting. "
+        "Keep entries brief — this is a watchlist, not a detailed analysis. "
+        "Do NOT invent hiring signals; confidence must be 'inferred' or 'hypothesis' only. "
+        "Each needs: company name, category, "
+        "why_it_may_be_relevant (brief rationale ≤15 words), "
+        "confidence (inferred or hypothesis), notes (optional note ≤15 words or empty string). "
+        "Name real companies. Minimum 10 items."
     ),
     "market_signals": (
         "Generate market_signals: 5-8 specific market signals relevant to this client's "
@@ -749,6 +893,21 @@ def _sanitise_radar(radar: MarketRadarOutput) -> MarketRadarOutput:
         co.signal_or_trigger = _clean(co.signal_or_trigger)
         co.entry_route       = _clean(co.entry_route)
 
+    for co in radar.tier1_companies:
+        co.why_relevant      = _clean(co.why_relevant)
+        co.signal_or_trigger = _clean(co.signal_or_trigger)
+        co.entry_route       = _clean(co.entry_route)
+        co.advisor_angle     = _clean(co.advisor_angle)
+
+    for co in radar.tier2_companies:
+        co.why_relevant         = _clean(co.why_relevant)
+        co.likely_role_angle    = _clean(co.likely_role_angle)
+        co.trigger_or_rationale = _clean(co.trigger_or_rationale)
+
+    for co in radar.tier3_companies:
+        co.why_it_may_be_relevant = _clean(co.why_it_may_be_relevant)
+        co.notes                  = _clean(co.notes)
+
     for sig in radar.market_signals:
         sig.signal                = _clean(sig.signal)
         sig.evidence_or_rationale = _clean(sig.evidence_or_rationale)
@@ -797,6 +956,7 @@ def _build_section_prompt(
     sources_block: str,
     mode: str,
     retry_note: Optional[str] = None,
+    extra_ctx: str = "",
 ) -> str:
     mode_note = {
         "full": (
@@ -825,8 +985,12 @@ def _build_section_prompt(
         f"{_CLEAN_LANGUAGE_RULES}\n\n"
         f"CONTEXT:\n{ctx_block}\n\n"
         f"SOURCES:\n{sources_block}\n\n"
-        f"Use the {tool_name} tool to return your result."
     )
+
+    if extra_ctx:
+        prompt += f"{extra_ctx.strip()}\n\n"
+
+    prompt += f"Use the {tool_name} tool to return your result."
 
     if retry_note:
         prompt += f"\n\nRETRY INSTRUCTION: {retry_note}"
@@ -895,6 +1059,52 @@ def _parse_section_result(
                     market_pull=fstr(item, "market_pull"),
                     fit_level=str(item.get("fit_level") or "").strip(),
                     watchouts=fstr(item, "watchouts"),
+                ))
+        return out
+
+    if section == "tier1_companies":
+        out = []
+        for item in (data.get("tier1_companies") or []):
+            if isinstance(item, dict):
+                out.append(Tier1Company(
+                    company=str(item.get("company") or "").strip(),
+                    category=str(item.get("category") or "").strip(),
+                    why_relevant=fstr(item, "why_relevant"),
+                    signal_or_trigger=fstr(item, "signal_or_trigger"),
+                    entry_route=fstr(item, "entry_route"),
+                    advisor_angle=fstr(item, "advisor_angle"),
+                    priority=str(item.get("priority") or "").strip(),
+                    confidence=str(item.get("confidence") or "").strip(),
+                    sources=resolve(item.get("sources")),
+                ))
+        return out
+
+    if section == "tier2_companies":
+        out = []
+        for item in (data.get("tier2_companies") or []):
+            if isinstance(item, dict):
+                out.append(Tier2Company(
+                    company=str(item.get("company") or "").strip(),
+                    category=str(item.get("category") or "").strip(),
+                    why_relevant=fstr(item, "why_relevant"),
+                    likely_role_angle=fstr(item, "likely_role_angle"),
+                    trigger_or_rationale=fstr(item, "trigger_or_rationale"),
+                    priority=str(item.get("priority") or "").strip(),
+                    confidence=str(item.get("confidence") or "").strip(),
+                    sources=resolve(item.get("sources")),
+                ))
+        return out
+
+    if section == "tier3_companies":
+        out = []
+        for item in (data.get("tier3_companies") or []):
+            if isinstance(item, dict):
+                out.append(Tier3Company(
+                    company=str(item.get("company") or "").strip(),
+                    category=str(item.get("category") or "").strip(),
+                    why_it_may_be_relevant=fstr(item, "why_it_may_be_relevant"),
+                    confidence=str(item.get("confidence") or "").strip(),
+                    notes=fstr(item, "notes"),
                 ))
         return out
 
@@ -978,10 +1188,12 @@ def _generate_section(
     sources_block: str,
     source_map: Dict[str, dict],
     mode: str,
+    extra_ctx: str = "",
 ) -> Tuple:
     """
     Generate one section end-to-end. Returns (result, is_complete).
     Validates result; retries once if below minimum. Never raises.
+    extra_ctx is injected into the prompt verbatim (used for tier exclusion lists).
     """
     max_tokens = _SECTION_MAX_TOKENS[section]
     empty: object = "" if section == "market_summary" else []
@@ -989,7 +1201,7 @@ def _generate_section(
     # ── Attempt 1 ────────────────────────────────────────────────────────────
     result = empty
     try:
-        prompt = _build_section_prompt(section, ctx_block, sources_block, mode)
+        prompt = _build_section_prompt(section, ctx_block, sources_block, mode, extra_ctx=extra_ctx)
         data = _call_section(anthropic_client, section, prompt, max_tokens)
         result = _parse_section_result(section, data, source_map)
     except Exception as exc:
@@ -1017,7 +1229,8 @@ def _generate_section(
     result2 = empty
     try:
         prompt2 = _build_section_prompt(
-            section, ctx_block, sources_block, mode, retry_note=retry_note
+            section, ctx_block, sources_block, mode,
+            retry_note=retry_note, extra_ctx=extra_ctx,
         )
         data2 = _call_section(anthropic_client, section, prompt2, max_tokens)
         result2 = _parse_section_result(section, data2, source_map)
@@ -1094,13 +1307,33 @@ def run_market_radar(
     section_results: Dict[str, object] = {}
     incomplete_sections: List[str] = []
 
+    # Accumulates company names from higher tiers to exclude from lower tiers,
+    # preventing duplication across the three-tier target company map.
+    excluded_companies: List[str] = []
+
     for section in _PIPELINE_SECTIONS:
+        extra_ctx = ""
+        if section in ("tier2_companies", "tier3_companies") and excluded_companies:
+            tier_label = "Tier 1" if section == "tier2_companies" else "Tier 1 and Tier 2"
+            extra_ctx = (
+                f"IMPORTANT — Do NOT include companies already assigned to {tier_label}: "
+                f"{', '.join(excluded_companies[:40])}. "
+                "Generate DIFFERENT companies only."
+            )
+
         result, ok = _generate_section(
-            anthropic_client, section, ctx_block, sources_block, source_map, mode
+            anthropic_client, section, ctx_block, sources_block, source_map, mode,
+            extra_ctx=extra_ctx,
         )
         section_results[section] = result
         if not ok:
             incomplete_sections.append(section)
+
+        # Collect names from tier1 and tier2 to exclude from subsequent tiers
+        if section in ("tier1_companies", "tier2_companies") and isinstance(result, list):
+            for item in result:
+                if hasattr(item, "company") and item.company:
+                    excluded_companies.append(item.company)
 
     # ── Assemble ──────────────────────────────────────────────────────────────
     source_urls = list(dict.fromkeys(
@@ -1110,7 +1343,10 @@ def run_market_radar(
     radar = MarketRadarOutput(
         market_summary=section_results.get("market_summary", ""),
         priority_pathways=section_results.get("priority_pathways", []),
-        target_companies=section_results.get("target_companies", []),
+        target_companies=[],  # no longer generated; field kept for backward compat
+        tier1_companies=section_results.get("tier1_companies", []),
+        tier2_companies=section_results.get("tier2_companies", []),
+        tier3_companies=section_results.get("tier3_companies", []),
         market_signals=section_results.get("market_signals", []),
         hidden_market_hypotheses=section_results.get("hidden_market_hypotheses", []),
         relationship_strategy=section_results.get("relationship_strategy", []),

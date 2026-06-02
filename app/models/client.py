@@ -73,6 +73,37 @@ class TargetCompany(BaseModel):
     sources: List[RadarSource] = Field(default_factory=list)
 
 
+class Tier1Company(BaseModel):
+    company: str = ""
+    category: str = ""
+    why_relevant: str = ""
+    signal_or_trigger: str = ""
+    entry_route: str = ""
+    advisor_angle: str = ""
+    priority: str = ""
+    confidence: str = ""
+    sources: List[RadarSource] = Field(default_factory=list)
+
+
+class Tier2Company(BaseModel):
+    company: str = ""
+    category: str = ""
+    why_relevant: str = ""
+    likely_role_angle: str = ""
+    trigger_or_rationale: str = ""
+    priority: str = ""
+    confidence: str = ""
+    sources: List[RadarSource] = Field(default_factory=list)
+
+
+class Tier3Company(BaseModel):
+    company: str = ""
+    category: str = ""
+    why_it_may_be_relevant: str = ""
+    confidence: str = ""
+    notes: str = ""
+
+
 class MarketRadarSignal(BaseModel):
     signal: str = ""
     signal_type: str = ""
@@ -101,7 +132,10 @@ class RelationshipStrategy(BaseModel):
 class MarketRadarOutput(BaseModel):
     market_summary: str = ""
     priority_pathways: List[MarketRadarPathway] = Field(default_factory=list)
-    target_companies: List[TargetCompany] = Field(default_factory=list)
+    target_companies: List[TargetCompany] = Field(default_factory=list)   # legacy; kept for backward compat
+    tier1_companies: List[Tier1Company] = Field(default_factory=list)
+    tier2_companies: List[Tier2Company] = Field(default_factory=list)
+    tier3_companies: List[Tier3Company] = Field(default_factory=list)
     market_signals: List[MarketRadarSignal] = Field(default_factory=list)
     hidden_market_hypotheses: List[HiddenMarketHypothesis] = Field(default_factory=list)
     relationship_strategy: List[RelationshipStrategy] = Field(default_factory=list)

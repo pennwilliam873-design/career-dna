@@ -22,6 +22,63 @@ function prefillFromCompany(company) {
   }
 }
 
+function prefillFromTier1(company) {
+  return {
+    title: company.company,
+    company: company.company,
+    pathway: '',
+    source_type: 'market_radar',
+    source_section: 'target_companies',
+    confidence: company.confidence || 'inferred',
+    priority: company.priority || 'High',
+    status: 'Monitor',
+    fit_rationale: company.why_relevant || '',
+    evidence: [company.signal_or_trigger, company.advisor_angle].filter(Boolean).join(' — '),
+    relationship_route: company.entry_route || '',
+    next_action: '',
+    advisor_note: company.advisor_angle || '',
+    sources: company.sources || [],
+  }
+}
+
+function prefillFromTier2(company) {
+  return {
+    title: company.company,
+    company: company.company,
+    pathway: '',
+    source_type: 'market_radar',
+    source_section: 'target_companies',
+    confidence: company.confidence || 'inferred',
+    priority: company.priority || 'Medium',
+    status: 'Monitor',
+    fit_rationale: company.why_relevant || '',
+    evidence: company.trigger_or_rationale || '',
+    relationship_route: company.likely_role_angle || '',
+    next_action: '',
+    advisor_note: '',
+    sources: company.sources || [],
+  }
+}
+
+function prefillFromTier3(company) {
+  return {
+    title: company.company,
+    company: company.company,
+    pathway: '',
+    source_type: 'market_radar',
+    source_section: 'target_companies',
+    confidence: 'hypothesis',
+    priority: 'Low',
+    status: 'Monitor',
+    fit_rationale: company.why_it_may_be_relevant || '',
+    evidence: company.notes || '',
+    relationship_route: '',
+    next_action: '',
+    advisor_note: '',
+    sources: [],
+  }
+}
+
 function prefillFromSignal(signal) {
   return {
     title: signal.signal,
@@ -256,8 +313,77 @@ export default function MarketRadarTab({ client, onUpdate }) {
             </>
           )}
 
-          {/* Target Companies */}
-          {radar.target_companies?.length > 0 && (
+          {/* ── Tiered Target Companies (new records) ────────────────────── */}
+          {(radar.tier1_companies?.length > 0 || radar.tier2_companies?.length > 0 || radar.tier3_companies?.length > 0) ? (
+            <>
+              {radar.tier1_companies?.length > 0 && (
+                <>
+                  <div className="os-section-title">
+                    Tier 1 — Priority Targets ({radar.tier1_companies.length})
+                  </div>
+                  <div className="os-company-grid">
+                    {radar.tier1_companies.map((c, i) => {
+                      const key = oppKey('target_companies', c.company, c.company)
+                      return (
+                        <Tier1Card
+                          key={i}
+                          company={c}
+                          isSaved={savedKeys.has(key)}
+                          isSaving={savingKey === key}
+                          onSaveTo={() => handleSaveTo(prefillFromTier1(c))}
+                        />
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+
+              {radar.tier2_companies?.length > 0 && (
+                <>
+                  <div className="os-section-title">
+                    Tier 2 — Strong Adjacent Targets ({radar.tier2_companies.length})
+                  </div>
+                  <div className="os-company-grid">
+                    {radar.tier2_companies.map((c, i) => {
+                      const key = oppKey('target_companies', c.company, c.company)
+                      return (
+                        <Tier2Card
+                          key={i}
+                          company={c}
+                          isSaved={savedKeys.has(key)}
+                          isSaving={savingKey === key}
+                          onSaveTo={() => handleSaveTo(prefillFromTier2(c))}
+                        />
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+
+              {radar.tier3_companies?.length > 0 && (
+                <>
+                  <div className="os-section-title">
+                    Tier 3 — Exploratory / Watchlist ({radar.tier3_companies.length})
+                  </div>
+                  <div className="os-company-grid">
+                    {radar.tier3_companies.map((c, i) => {
+                      const key = oppKey('target_companies', c.company, c.company)
+                      return (
+                        <Tier3Card
+                          key={i}
+                          company={c}
+                          isSaved={savedKeys.has(key)}
+                          isSaving={savingKey === key}
+                          onSaveTo={() => handleSaveTo(prefillFromTier3(c))}
+                        />
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+            </>
+          ) : radar.target_companies?.length > 0 ? (
+            /* ── Legacy flat list (old records without tier data) ─────────── */
             <>
               <div className="os-section-title">Target Companies ({radar.target_companies.length})</div>
               <div className="os-company-grid">
@@ -275,7 +401,7 @@ export default function MarketRadarTab({ client, onUpdate }) {
                 })}
               </div>
             </>
-          )}
+          ) : null}
 
           {/* Market Signals */}
           {radar.market_signals?.length > 0 && (
@@ -473,6 +599,140 @@ function RadarPathwayCard({ pathway }) {
     </div>
   )
 }
+
+// ── Tier 1 Card — full detail ─────────────────────────────────────────────────
+
+function Tier1Card({ company, isSaved, isSaving, onSaveTo }) {
+  const pri = (company.priority || '').toLowerCase()
+  const priCls =
+    pri === 'high'   ? 'os-priority-badge--high'   :
+    pri === 'medium' ? 'os-priority-badge--medium'  :
+                       'os-priority-badge--low'
+
+  const conf = (company.confidence || '').toLowerCase()
+  const confCls =
+    conf === 'verified'  ? 'os-confidence-badge--verified'  :
+    conf === 'inferred'  ? 'os-confidence-badge--inferred'  :
+                           'os-confidence-badge--hypothesis'
+
+  const hasSources = company.sources?.length > 0
+
+  return (
+    <div className="os-company-card">
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+        <p className="os-company-name">{company.company}</p>
+        <div style={{ display: 'flex', gap: 4, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {company.priority && <span className={`os-priority-badge ${priCls}`}>{company.priority}</span>}
+          {company.confidence && <span className={`os-confidence-badge ${confCls}`}>{company.confidence}</span>}
+        </div>
+      </div>
+      {company.category && (
+        <span className="os-signal-type-badge" style={{ marginBottom: 8, display: 'inline-block' }}>
+          {company.category}
+        </span>
+      )}
+      {company.why_relevant && (
+        <p className="os-company-detail">{company.why_relevant}</p>
+      )}
+      {company.signal_or_trigger && (
+        <p className="os-company-detail os-company-detail--muted">
+          <strong>Signal:</strong>{' '}{company.signal_or_trigger}
+          {hasSources && <FootnoteRefs count={company.sources.length} />}
+        </p>
+      )}
+      {company.entry_route && (
+        <p className="os-company-detail os-company-detail--muted">
+          <strong>Entry:</strong> {company.entry_route}
+        </p>
+      )}
+      {company.advisor_angle && (
+        <p className="os-opp-advisor-note">{company.advisor_angle}</p>
+      )}
+      <ItemSources sources={company.sources} />
+      <SaveToOppsBtn isSaved={isSaved} isSaving={isSaving} onSaveTo={onSaveTo} />
+    </div>
+  )
+}
+
+// ── Tier 2 Card — concise ─────────────────────────────────────────────────────
+
+function Tier2Card({ company, isSaved, isSaving, onSaveTo }) {
+  const pri = (company.priority || '').toLowerCase()
+  const priCls =
+    pri === 'high'   ? 'os-priority-badge--high'   :
+    pri === 'medium' ? 'os-priority-badge--medium'  :
+                       'os-priority-badge--low'
+
+  const hasSources = company.sources?.length > 0
+
+  return (
+    <div className="os-company-card">
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+        <p className="os-company-name">{company.company}</p>
+        {company.priority && <span className={`os-priority-badge ${priCls}`}>{company.priority}</span>}
+      </div>
+      {company.category && (
+        <span className="os-signal-type-badge" style={{ marginBottom: 8, display: 'inline-block' }}>
+          {company.category}
+        </span>
+      )}
+      {company.why_relevant && (
+        <p className="os-company-detail">{company.why_relevant}</p>
+      )}
+      {company.likely_role_angle && (
+        <p className="os-company-detail os-company-detail--muted">
+          <strong>Role angle:</strong> {company.likely_role_angle}
+        </p>
+      )}
+      {company.trigger_or_rationale && (
+        <p className="os-company-detail os-company-detail--muted">
+          {company.trigger_or_rationale}
+          {hasSources && <FootnoteRefs count={company.sources.length} />}
+        </p>
+      )}
+      <ItemSources sources={company.sources} />
+      <SaveToOppsBtn isSaved={isSaved} isSaving={isSaving} onSaveTo={onSaveTo} />
+    </div>
+  )
+}
+
+// ── Tier 3 Card — compact watchlist ──────────────────────────────────────────
+
+function Tier3Card({ company, isSaved, isSaving, onSaveTo }) {
+  const conf = (company.confidence || '').toLowerCase()
+  const confCls =
+    conf === 'inferred'  ? 'os-confidence-badge--inferred'  :
+                           'os-confidence-badge--hypothesis'
+
+  return (
+    <div className="os-company-card" style={{ padding: '10px 14px' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+        <p className="os-company-name" style={{ fontSize: 13 }}>{company.company}</p>
+        {company.confidence && (
+          <span className={`os-confidence-badge ${confCls}`} style={{ flexShrink: 0 }}>{company.confidence}</span>
+        )}
+      </div>
+      {company.category && (
+        <span className="os-signal-type-badge" style={{ marginBottom: 6, display: 'inline-block', fontSize: 10 }}>
+          {company.category}
+        </span>
+      )}
+      {company.why_it_may_be_relevant && (
+        <p className="os-company-detail os-company-detail--muted" style={{ fontSize: 12 }}>
+          {company.why_it_may_be_relevant}
+        </p>
+      )}
+      {company.notes && (
+        <p className="os-company-detail os-company-detail--muted" style={{ fontSize: 11, fontStyle: 'italic' }}>
+          {company.notes}
+        </p>
+      )}
+      <SaveToOppsBtn isSaved={isSaved} isSaving={isSaving} onSaveTo={onSaveTo} />
+    </div>
+  )
+}
+
+// ── Legacy Tier (flat target_companies for old records) ───────────────────────
 
 function CompanyCard({ company, isSaved, isSaving, onSaveTo }) {
   const pri = (company.priority || '').toLowerCase()
