@@ -321,7 +321,7 @@ export default function MarketRadarTab({ client, onUpdate }) {
                   <div className="os-section-title">
                     Tier 1 — Priority Targets ({radar.tier1_companies.length})
                   </div>
-                  <div className="os-company-grid">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
                     {radar.tier1_companies.map((c, i) => {
                       const key = oppKey('target_companies', c.company, c.company)
                       return (
@@ -511,10 +511,10 @@ export default function MarketRadarTab({ client, onUpdate }) {
 // Used at the bottom of Signal, Company, and Hypothesis cards.
 // Sources are numbered [1], [2], … matching superscript markers in the card body.
 
-function ItemSources({ sources }) {
+function ItemSources({ sources, noBorder = false }) {
   if (!sources?.length) return null
   return (
-    <div className="os-item-sources">
+    <div className="os-item-sources" style={noBorder ? { borderTop: 'none', marginTop: 4, paddingTop: 0 } : {}}>
       {sources.map((src, i) => (
         <div key={i} className="os-item-source">
           <span className="os-item-source-num">[{i + 1}]</span>
@@ -551,15 +551,17 @@ function FootnoteRefs({ count }) {
 
 // ── Shared save button ────────────────────────────────────────────────────────
 
-function SaveToOppsBtn({ isSaved, isSaving, onSaveTo }) {
+function SaveToOppsBtn({ isSaved, isSaving, onSaveTo, compact = false }) {
+  const mt = compact ? { marginTop: 0 } : {}
   if (isSaved) {
-    return <div className="os-save-to-opp-btn os-save-to-opp-btn--saved">✓ Saved to Opportunities</div>
+    return <div className="os-save-to-opp-btn os-save-to-opp-btn--saved" style={mt}>✓ Saved to Opportunities</div>
   }
   return (
     <button
       className={`os-save-to-opp-btn${isSaving ? ' os-save-to-opp-btn--saving' : ''}`}
       onClick={onSaveTo}
       disabled={isSaving}
+      style={mt}
     >
       {isSaving ? 'Saving…' : 'Save to Opportunities'}
     </button>
@@ -600,56 +602,88 @@ function RadarPathwayCard({ pathway }) {
   )
 }
 
-// ── Tier 1 Card — full detail ─────────────────────────────────────────────────
+// ── Tier 1 Card — full detail, single-column, compact ────────────────────────
 
 function Tier1Card({ company, isSaved, isSaving, onSaveTo }) {
-  const pri = (company.priority || '').toLowerCase()
-  const priCls =
-    pri === 'high'   ? 'os-priority-badge--high'   :
-    pri === 'medium' ? 'os-priority-badge--medium'  :
-                       'os-priority-badge--low'
+  const [showSources, setShowSources] = useState(false)
 
+  const pri = (company.priority || '').toLowerCase()
+  const priCls = pri === 'high' ? 'os-priority-badge--high' : 'os-priority-badge--medium'
   const conf = (company.confidence || '').toLowerCase()
   const confCls =
     conf === 'verified'  ? 'os-confidence-badge--verified'  :
     conf === 'inferred'  ? 'os-confidence-badge--inferred'  :
                            'os-confidence-badge--hypothesis'
-
   const hasSources = company.sources?.length > 0
 
   return (
-    <div className="os-company-card">
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
-        <p className="os-company-name">{company.company}</p>
-        <div style={{ display: 'flex', gap: 4, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+    <div className="os-company-card" style={{ padding: '12px 16px' }}>
+      {/* Header: name + category + priority + confidence all on one row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+        <p className="os-company-name" style={{ margin: 0 }}>{company.company}</p>
+        {company.category && (
+          <span className="os-signal-type-badge">{company.category}</span>
+        )}
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 4, flexShrink: 0 }}>
           {company.priority && <span className={`os-priority-badge ${priCls}`}>{company.priority}</span>}
           {company.confidence && <span className={`os-confidence-badge ${confCls}`}>{company.confidence}</span>}
         </div>
       </div>
-      {company.category && (
-        <span className="os-signal-type-badge" style={{ marginBottom: 8, display: 'inline-block' }}>
-          {company.category}
-        </span>
-      )}
+
+      {/* Why relevant — primary body */}
       {company.why_relevant && (
-        <p className="os-company-detail">{company.why_relevant}</p>
-      )}
-      {company.signal_or_trigger && (
-        <p className="os-company-detail os-company-detail--muted">
-          <strong>Signal:</strong>{' '}{company.signal_or_trigger}
-          {hasSources && <FootnoteRefs count={company.sources.length} />}
+        <p className="os-company-detail" style={{ marginTop: 0, marginBottom: 0 }}>
+          {company.why_relevant}
         </p>
       )}
-      {company.entry_route && (
-        <p className="os-company-detail os-company-detail--muted">
-          <strong>Entry:</strong> {company.entry_route}
-        </p>
+
+      {/* Signal + Entry — compact two-column meta row */}
+      {(company.signal_or_trigger || company.entry_route) && (
+        <div style={{
+          display: 'flex', gap: 16, flexWrap: 'wrap',
+          marginTop: 6, paddingTop: 6, borderTop: '1px solid #f1f5f9',
+        }}>
+          {company.signal_or_trigger && (
+            <span style={{ fontSize: 11, color: '#64748b', lineHeight: 1.45, flex: '1 1 40%', minWidth: 0 }}>
+              <span style={{ fontWeight: 700, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', marginRight: 3 }}>Signal</span>
+              {company.signal_or_trigger}
+              {hasSources && <FootnoteRefs count={company.sources.length} />}
+            </span>
+          )}
+          {company.entry_route && (
+            <span style={{ fontSize: 11, color: '#64748b', lineHeight: 1.45, flex: '1 1 40%', minWidth: 0 }}>
+              <span style={{ fontWeight: 700, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', marginRight: 3 }}>Entry</span>
+              {company.entry_route}
+            </span>
+          )}
+        </div>
       )}
+
+      {/* Advisor angle — reduced amber infobox */}
       {company.advisor_angle && (
-        <p className="os-opp-advisor-note">{company.advisor_angle}</p>
+        <p style={{
+          fontSize: 11, color: '#92400e', background: '#fffbeb',
+          border: '1px solid #fde68a', borderRadius: 4,
+          padding: '3px 8px', margin: '6px 0 0', lineHeight: 1.45,
+        }}>
+          {company.advisor_angle}
+        </p>
       )}
-      <ItemSources sources={company.sources} />
-      <SaveToOppsBtn isSaved={isSaved} isSaving={isSaving} onSaveTo={onSaveTo} />
+
+      {/* Footer: sources toggle on left, save button on right */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginTop: 8, paddingTop: 6, borderTop: '1px solid #f1f5f9', gap: 8,
+      }}>
+        {hasSources ? (
+          <button className="os-opp-sources-toggle" onClick={() => setShowSources(v => !v)}>
+            {showSources ? '▾' : '▸'} {company.sources.length} source{company.sources.length > 1 ? 's' : ''}
+          </button>
+        ) : <span />}
+        <SaveToOppsBtn isSaved={isSaved} isSaving={isSaving} onSaveTo={onSaveTo} compact />
+      </div>
+
+      {showSources && <ItemSources sources={company.sources} noBorder />}
     </div>
   )
 }
@@ -657,41 +691,57 @@ function Tier1Card({ company, isSaved, isSaving, onSaveTo }) {
 // ── Tier 2 Card — concise ─────────────────────────────────────────────────────
 
 function Tier2Card({ company, isSaved, isSaving, onSaveTo }) {
+  const [showSources, setShowSources] = useState(false)
+
   const pri = (company.priority || '').toLowerCase()
   const priCls =
     pri === 'high'   ? 'os-priority-badge--high'   :
     pri === 'medium' ? 'os-priority-badge--medium'  :
                        'os-priority-badge--low'
-
   const hasSources = company.sources?.length > 0
 
   return (
-    <div className="os-company-card">
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
-        <p className="os-company-name">{company.company}</p>
-        {company.priority && <span className={`os-priority-badge ${priCls}`}>{company.priority}</span>}
+    <div className="os-company-card" style={{ padding: '11px 14px' }}>
+      {/* Header: name + priority */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6, marginBottom: 2 }}>
+        <p className="os-company-name" style={{ margin: 0, fontSize: 13 }}>{company.company}</p>
+        {company.priority && <span className={`os-priority-badge ${priCls}`} style={{ flexShrink: 0 }}>{company.priority}</span>}
       </div>
-      {company.category && (
-        <span className="os-signal-type-badge" style={{ marginBottom: 8, display: 'inline-block' }}>
-          {company.category}
-        </span>
-      )}
-      {company.why_relevant && (
-        <p className="os-company-detail">{company.why_relevant}</p>
-      )}
-      {company.likely_role_angle && (
-        <p className="os-company-detail os-company-detail--muted">
-          <strong>Role angle:</strong> {company.likely_role_angle}
+
+      {/* Category · role angle — single muted line */}
+      {(company.category || company.likely_role_angle) && (
+        <p style={{ fontSize: 11, color: '#94a3b8', margin: '0 0 4px', fontWeight: 500 }}>
+          {[company.category, company.likely_role_angle].filter(Boolean).join(' · ')}
         </p>
       )}
+
+      {/* Why relevant */}
+      {company.why_relevant && (
+        <p className="os-company-detail" style={{ marginTop: 0, marginBottom: 0 }}>{company.why_relevant}</p>
+      )}
+
+      {/* Trigger / rationale */}
       {company.trigger_or_rationale && (
-        <p className="os-company-detail os-company-detail--muted">
+        <p className="os-company-detail os-company-detail--muted" style={{ marginTop: 3, fontSize: 11 }}>
           {company.trigger_or_rationale}
           {hasSources && <FootnoteRefs count={company.sources.length} />}
         </p>
       )}
-      <ItemSources sources={company.sources} />
-      <SaveToOppsBtn isSaved={isSaved} isSaving={isSaving} onSaveTo={onSaveTo} />
+
+      {/* Footer */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginTop: 7, paddingTop: 5, borderTop: '1px solid #f1f5f9', gap: 8,
+      }}>
+        {hasSources ? (
+          <button className="os-opp-sources-toggle" onClick={() => setShowSources(v => !v)}>
+            {showSources ? '▾' : '▸'} {company.sources.length} source{company.sources.length > 1 ? 's' : ''}
+          </button>
+        ) : <span />}
+        <SaveToOppsBtn isSaved={isSaved} isSaving={isSaving} onSaveTo={onSaveTo} compact />
+      </div>
+
+      {showSources && <ItemSources sources={company.sources} noBorder />}
     </div>
   )
 }
@@ -705,29 +755,34 @@ function Tier3Card({ company, isSaved, isSaving, onSaveTo }) {
                            'os-confidence-badge--hypothesis'
 
   return (
-    <div className="os-company-card" style={{ padding: '10px 14px' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
-        <p className="os-company-name" style={{ fontSize: 13 }}>{company.company}</p>
+    <div className="os-company-card" style={{ padding: '9px 12px' }}>
+      {/* Name + confidence on one row */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 3 }}>
+        <p className="os-company-name" style={{ margin: 0, fontSize: 12 }}>{company.company}</p>
         {company.confidence && (
           <span className={`os-confidence-badge ${confCls}`} style={{ flexShrink: 0 }}>{company.confidence}</span>
         )}
       </div>
-      {company.category && (
-        <span className="os-signal-type-badge" style={{ marginBottom: 6, display: 'inline-block', fontSize: 10 }}>
-          {company.category}
-        </span>
-      )}
-      {company.why_it_may_be_relevant && (
-        <p className="os-company-detail os-company-detail--muted" style={{ fontSize: 12 }}>
+
+      {/* Category · relevance on one line */}
+      {(company.category || company.why_it_may_be_relevant) && (
+        <p style={{ fontSize: 11, color: '#64748b', margin: 0, lineHeight: 1.4 }}>
+          {company.category && (
+            <span style={{ fontWeight: 600, color: '#475569' }}>{company.category}</span>
+          )}
+          {company.category && company.why_it_may_be_relevant && ' · '}
           {company.why_it_may_be_relevant}
         </p>
       )}
+
+      {/* Notes */}
       {company.notes && (
-        <p className="os-company-detail os-company-detail--muted" style={{ fontSize: 11, fontStyle: 'italic' }}>
+        <p style={{ fontSize: 10, color: '#94a3b8', margin: '2px 0 0', fontStyle: 'italic', lineHeight: 1.3 }}>
           {company.notes}
         </p>
       )}
-      <SaveToOppsBtn isSaved={isSaved} isSaving={isSaving} onSaveTo={onSaveTo} />
+
+      <SaveToOppsBtn isSaved={isSaved} isSaving={isSaving} onSaveTo={onSaveTo} compact />
     </div>
   )
 }
