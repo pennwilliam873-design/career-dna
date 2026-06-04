@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { api } from '../../apiClient'
 
 // Split a textarea's newline-separated text into a trimmed, non-empty array.
@@ -188,14 +188,14 @@ export default function AdvisorBriefTab({ client, onUpdate }) {
             label="Brief Summary"
             value={editForm.brief_summary}
             onChange={v => setField('brief_summary', v)}
-            rows={3}
+            minHeight={90}
           />
 
           <BriefEditField
             label="Client Situation"
             value={editForm.client_situation}
             onChange={v => setField('client_situation', v)}
-            rows={3}
+            minHeight={90}
           />
 
           <BriefEditListField
@@ -203,7 +203,7 @@ export default function AdvisorBriefTab({ client, onUpdate }) {
             hint="One item per line"
             value={editForm.session_focus_text}
             onChange={v => setField('session_focus_text', v)}
-            rows={5}
+            minHeight={130}
           />
 
           <BriefEditListField
@@ -211,7 +211,7 @@ export default function AdvisorBriefTab({ client, onUpdate }) {
             hint="One insight per line"
             value={editForm.key_positioning_insights_text}
             onChange={v => setField('key_positioning_insights_text', v)}
-            rows={5}
+            minHeight={130}
           />
 
           {/* Priority Opportunities — per-subfield editing */}
@@ -232,14 +232,14 @@ export default function AdvisorBriefTab({ client, onUpdate }) {
                   label="Opportunity"
                   value={opp.opportunity}
                   onChange={v => updateOpp(i, 'opportunity', v)}
-                  rows={1}
+                  minHeight={44}
                 />
                 <div style={{ marginTop: 8 }}>
                   <BriefEditField
                     label="Why it matters"
                     value={opp.why_it_matters}
                     onChange={v => updateOpp(i, 'why_it_matters', v)}
-                    rows={2}
+                    minHeight={64}
                   />
                 </div>
                 <div style={{ marginTop: 8 }}>
@@ -247,7 +247,7 @@ export default function AdvisorBriefTab({ client, onUpdate }) {
                     label="Recommended advisor action"
                     value={opp.recommended_advisor_action}
                     onChange={v => updateOpp(i, 'recommended_advisor_action', v)}
-                    rows={2}
+                    minHeight={64}
                   />
                 </div>
                 <div style={{ marginTop: 8 }}>
@@ -255,7 +255,7 @@ export default function AdvisorBriefTab({ client, onUpdate }) {
                     label="Risk / watch out"
                     value={opp.risk_or_watchout}
                     onChange={v => updateOpp(i, 'risk_or_watchout', v)}
-                    rows={2}
+                    minHeight={64}
                   />
                 </div>
               </div>
@@ -267,7 +267,7 @@ export default function AdvisorBriefTab({ client, onUpdate }) {
             hint="One signal per line"
             value={editForm.market_signals_text}
             onChange={v => setField('market_signals_text', v)}
-            rows={5}
+            minHeight={130}
           />
 
           <BriefEditListField
@@ -275,7 +275,7 @@ export default function AdvisorBriefTab({ client, onUpdate }) {
             hint="One question per line"
             value={editForm.questions_text}
             onChange={v => setField('questions_text', v)}
-            rows={6}
+            minHeight={150}
           />
 
           <BriefEditListField
@@ -283,7 +283,7 @@ export default function AdvisorBriefTab({ client, onUpdate }) {
             hint="One challenge per line"
             value={editForm.challenges_text}
             onChange={v => setField('challenges_text', v)}
-            rows={4}
+            minHeight={110}
           />
 
           <BriefEditListField
@@ -291,7 +291,7 @@ export default function AdvisorBriefTab({ client, onUpdate }) {
             hint="One action per line"
             value={editForm.next_actions_text}
             onChange={v => setField('next_actions_text', v)}
-            rows={4}
+            minHeight={110}
           />
 
           <BriefEditListField
@@ -299,7 +299,7 @@ export default function AdvisorBriefTab({ client, onUpdate }) {
             hint="One note per line"
             value={editForm.advisor_notes_text}
             onChange={v => setField('advisor_notes_text', v)}
-            rows={4}
+            minHeight={110}
           />
 
         </div>
@@ -505,34 +505,55 @@ export default function AdvisorBriefTab({ client, onUpdate }) {
   )
 }
 
+// ── AutoTextarea — grows to fit content, never scrolls internally ─────────────
+
+function AutoTextarea({ value, onChange, minHeight = 80, maxHeight = 560 }) {
+  const ref = useRef(null)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, minHeight), maxHeight)}px`
+  }, [value, minHeight, maxHeight])
+
+  return (
+    <textarea
+      ref={ref}
+      className="os-textarea"
+      value={value}
+      onChange={onChange}
+      style={{ minHeight, resize: 'vertical', overflowY: 'auto' }}
+    />
+  )
+}
+
 // ── Edit field helpers ────────────────────────────────────────────────────────
 
-function BriefEditField({ label, value, onChange, rows = 2 }) {
+function BriefEditField({ label, value, onChange, minHeight = 80 }) {
   return (
     <div>
       <label className="os-label">{label}</label>
-      <textarea
-        className="os-textarea"
+      <AutoTextarea
         value={value}
         onChange={e => onChange(e.target.value)}
-        rows={rows}
+        minHeight={minHeight}
       />
     </div>
   )
 }
 
-function BriefEditListField({ label, hint, value, onChange, rows = 4 }) {
+function BriefEditListField({ label, hint, value, onChange, minHeight = 130 }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
         <label className="os-label" style={{ marginBottom: 0 }}>{label}</label>
         <span style={{ fontSize: 10, color: '#94a3b8' }}>{hint}</span>
       </div>
-      <textarea
-        className="os-textarea"
+      <AutoTextarea
         value={value}
         onChange={e => onChange(e.target.value)}
-        rows={rows}
+        minHeight={minHeight}
       />
     </div>
   )
