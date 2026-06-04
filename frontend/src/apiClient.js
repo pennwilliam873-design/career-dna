@@ -46,6 +46,8 @@ export const api = {
   updateOpportunity: (id, oppId, opp) => req('PUT', `/clients/${id}/opportunities/${oppId}`, opp),
   deleteOpportunity: (id, oppId)     => req('DELETE', `/clients/${id}/opportunities/${oppId}`),
 
+  updateAdvisorBrief:  (id, brief)           => req('PUT',  `/clients/${id}/advisor-brief`, brief,    true),
+
   // ── Slow AI operations — call Railway directly to bypass Vercel 10s limit ─
   analyseCv:           (id)                  => req('POST', `/clients/${id}/analyse-cv`,            undefined, true),
   generatePositioning: (id)                  => req('POST', `/clients/${id}/generate-positioning`,  undefined, true),

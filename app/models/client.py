@@ -247,6 +247,8 @@ class ClientRecord(BaseModel):
     advisor_brief: Optional[AdvisorBrief] = None
     advisor_brief_raw: Optional[str] = None
     advisor_brief_generated_at: Optional[str] = None
+    advisor_brief_is_edited: Optional[bool] = None
+    advisor_brief_edited_at: Optional[str] = None
 
 
 class CreateClientRequest(BaseModel):

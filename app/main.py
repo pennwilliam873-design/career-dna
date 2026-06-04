@@ -19,6 +19,7 @@ from app.models.client import (
     ClientRecord, ClientProfile, CreateClientRequest, UpdateClientRequest,
     MarketRadarRequest, Opportunity, OpportunityRequest,
     SessionNote, ActionItem, SessionNoteRequest, ActionItemRequest,
+    AdvisorBrief,
 )
 from app.data.storage import list_clients, get_client, create_client, update_client, delete_client
 from app.services.positioning import generate_positioning
@@ -416,5 +417,19 @@ def post_generate_advisor_brief(client_id: str):
     record.advisor_brief = result.brief
     record.advisor_brief_raw = result.raw_text if result.parse_failed else None
     record.advisor_brief_generated_at = datetime.now(timezone.utc).isoformat()
+    record.advisor_brief_is_edited = False
+    record.advisor_brief_edited_at = None
+    updated = update_client(record)
+    return JSONResponse(status_code=200, content=updated.model_dump(mode="json"))
+
+
+@app.put("/clients/{client_id}/advisor-brief")
+def put_advisor_brief(client_id: str, body: AdvisorBrief):
+    record = get_client(client_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Client not found.")
+    record.advisor_brief = body
+    record.advisor_brief_is_edited = True
+    record.advisor_brief_edited_at = datetime.now(timezone.utc).isoformat()
     updated = update_client(record)
     return JSONResponse(status_code=200, content=updated.model_dump(mode="json"))
