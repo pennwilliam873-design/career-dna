@@ -146,13 +146,13 @@ export default function ProfileTab({ client, onSave }) {
             value={form.cv_text}
             onChange={handleChange}
             rows={12}
-            placeholder="Paste the full CV here, or upload a .txt file below"
+            placeholder="Paste the full CV here, or upload a file below"
           />
           <div className="os-upload-row">
             <input
               ref={fileRef}
               type="file"
-              accept=".txt,text/plain"
+              accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
               style={{ display: 'none' }}
               onChange={handleFileUpload}
             />
@@ -162,7 +162,7 @@ export default function ProfileTab({ client, onSave }) {
               style={{ fontSize: 12, padding: '6px 12px' }}
               onClick={() => fileRef.current?.click()}
             >
-              Upload .txt
+              Upload CV file
             </button>
             <span className="os-upload-hint">Replaces pasted text above</span>
           </div>

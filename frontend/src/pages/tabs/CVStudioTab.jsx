@@ -97,7 +97,7 @@ export default function CVStudioTab({ client, onUpdate }) {
           <input
             ref={fileRef}
             type="file"
-            accept=".pdf,.docx,.txt"
+            accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
             style={{ display: 'none' }}
             onChange={handleFileChange}
           />
@@ -108,7 +108,7 @@ export default function CVStudioTab({ client, onUpdate }) {
           >
             {extracting ? 'Extracting…' : '↑ Upload CV file'}
           </button>
-          <span style={{ fontSize: 11, color: '#94a3b8' }}>PDF, DOCX, or TXT</span>
+          <span style={{ fontSize: 11, color: '#94a3b8' }}>Supports PDF, DOCX or TXT. Replaces pasted text above.</span>
           {savedCvText && (
             <button
               className="os-btn os-btn--ghost"
