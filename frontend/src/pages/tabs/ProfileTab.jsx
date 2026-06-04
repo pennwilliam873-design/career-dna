@@ -18,10 +18,12 @@ const EMPTY_PROFILE = {
 
 export default function ProfileTab({ client, onSave }) {
   const [form, setForm]     = useState({ ...EMPTY_PROFILE, ...client.profile })
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved]   = useState(false)
-  const [error, setError]   = useState('')
-  const fileRef             = useRef(null)
+  const [saving,      setSaving]      = useState(false)
+  const [saved,       setSaved]       = useState(false)
+  const [error,       setError]       = useState('')
+  const [extracting,  setExtracting]  = useState(false)
+  const [extractWarn, setExtractWarn] = useState('')
+  const fileRef = useRef(null)
 
   function handleChange(e) {
     const { name, value } = e.target
@@ -29,16 +31,24 @@ export default function ProfileTab({ client, onSave }) {
     setSaved(false)
   }
 
-  function handleFileUpload(e) {
+  async function handleFileUpload(e) {
     const file = e.target.files?.[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = evt => {
-      setForm(prev => ({ ...prev, cv_text: evt.target.result }))
+    e.target.value = ''   // allow re-selecting the same file
+    setExtracting(true)
+    setExtractWarn('')
+    setError('')
+    try {
+      const result = await api.extractCvFile(client.id, file)
+      setForm(prev => ({ ...prev, cv_text: result.text || '' }))
       setSaved(false)
+      if (result.warning) setExtractWarn(result.warning)
+    } catch (err) {
+      setError(err.message)
+      // Leave existing cv_text unchanged on error
+    } finally {
+      setExtracting(false)
     }
-    reader.readAsText(file)
-    e.target.value = ''
   }
 
   async function handleSave(e) {
@@ -161,11 +171,17 @@ export default function ProfileTab({ client, onSave }) {
               className="os-btn os-btn--secondary"
               style={{ fontSize: 12, padding: '6px 12px' }}
               onClick={() => fileRef.current?.click()}
+              disabled={extracting}
             >
-              Upload CV file
+              {extracting ? 'Extracting…' : 'Upload CV file'}
             </button>
             <span className="os-upload-hint">Replaces pasted text above</span>
           </div>
+          {extractWarn && (
+            <div className="os-raw-warning" style={{ marginTop: 6 }}>
+              {extractWarn}
+            </div>
+          )}
         </div>
       </div>
 
