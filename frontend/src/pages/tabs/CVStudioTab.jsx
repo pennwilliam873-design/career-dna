@@ -1,21 +1,76 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { api } from '../../apiClient'
 
 export default function CVStudioTab({ client, onUpdate }) {
-  const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState('')
-  const [showCv, setShowCv]   = useState(false)
-
-  const cvText      = client.profile?.cv_text?.trim() || ''
-  const intel       = client.cv_intelligence       // structured (primary path)
-  const rawText     = client.cv_intelligence_raw   // markdown fallback
-  const hasOutput   = intel || rawText
-  const generatedAt = client.cv_intelligence_generated_at
+  const savedCvText  = client.profile?.cv_text?.trim() || ''
+  const intel        = client.cv_intelligence
+  const rawText      = client.cv_intelligence_raw
+  const hasOutput    = intel || rawText
+  const generatedAt  = client.cv_intelligence_generated_at
     ? new Date(client.cv_intelligence_generated_at).toLocaleString('en-GB', {
         day: 'numeric', month: 'short', year: 'numeric',
         hour: '2-digit', minute: '2-digit',
       })
     : null
+
+  const [localCvText,   setLocalCvText]  = useState(savedCvText)
+  const [showEditor,    setShowEditor]   = useState(!savedCvText) // open by default when empty
+  const [loading,       setLoading]      = useState(false)
+  const [extracting,    setExtracting]   = useState(false)
+  const [saving,        setSaving]       = useState(false)
+  const [error,         setError]        = useState('')
+  const [extractWarn,   setExtractWarn]  = useState('')
+  const fileRef = useRef(null)
+
+  // Re-sync local text when switching to a different client
+  useEffect(() => {
+    const t = client.profile?.cv_text?.trim() || ''
+    setLocalCvText(t)
+    setShowEditor(!t)
+    setExtractWarn('')
+  }, [client.id])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  const isDirty = localCvText !== savedCvText
+
+  // ── File upload ───────────────────────────────────────────────────────────
+
+  async function handleFileChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''   // allow re-selecting the same file
+    setExtracting(true)
+    setExtractWarn('')
+    setError('')
+    try {
+      const result = await api.extractCvFile(client.id, file)
+      setLocalCvText(result.text || '')
+      if (result.warning) setExtractWarn(result.warning)
+      setShowEditor(true)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setExtracting(false)
+    }
+  }
+
+  // ── Save CV text ──────────────────────────────────────────────────────────
+
+  async function handleSaveCvText() {
+    setSaving(true)
+    setError('')
+    try {
+      const updatedProfile = { ...client.profile, cv_text: localCvText }
+      const updated = await api.updateClient(client.id, updatedProfile)
+      onUpdate(updated)
+      setShowEditor(false)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // ── Analyse ───────────────────────────────────────────────────────────────
 
   async function handleAnalyse() {
     setLoading(true)
@@ -30,56 +85,118 @@ export default function CVStudioTab({ client, onUpdate }) {
     }
   }
 
-  // ── No CV saved yet ───────────────────────────────────────────────────────
-  if (!cvText) {
-    return (
-      <div className="os-generate-prompt">
-        <p className="os-generate-prompt-title">No CV text saved</p>
-        <p className="os-generate-prompt-body">
-          Go to the <strong>Profile</strong> tab, paste the client's CV, and click{' '}
-          <strong>Save Profile</strong>. Then return here to run the analysis.
-        </p>
-      </div>
-    )
-  }
-
   return (
     <div>
       {error && <div className="os-error">{error}</div>}
 
-      {/* ── Action bar ─────────────────────────────────────────────────── */}
-      <div className="os-positioning-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      {/* ── CV Text section ─────────────────────────────────────────────── */}
+      <div style={{ marginBottom: 20 }}>
+
+        {/* Upload row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".pdf,.docx,.txt"
+            style={{ display: 'none' }}
+            onChange={handleFileChange}
+          />
           <button
-            className="os-btn os-btn--primary"
-            onClick={handleAnalyse}
-            disabled={loading}
+            className="os-btn os-btn--secondary os-btn--sm"
+            onClick={() => fileRef.current?.click()}
+            disabled={extracting || loading || saving}
           >
-            {loading ? 'Analysing CV…' : hasOutput ? 'Re-analyse CV' : 'Analyse CV'}
+            {extracting ? 'Extracting…' : '↑ Upload CV file'}
           </button>
-          {generatedAt && (
-            <span className="os-positioning-meta">Last run {generatedAt}</span>
+          <span style={{ fontSize: 11, color: '#94a3b8' }}>PDF, DOCX, or TXT</span>
+          {savedCvText && (
+            <button
+              className="os-btn os-btn--ghost"
+              onClick={() => setShowEditor(v => !v)}
+              style={{ fontSize: 12, marginLeft: 'auto' }}
+            >
+              {showEditor ? 'Hide CV text' : 'Edit CV text'}
+            </button>
           )}
         </div>
 
-        <button
-          className="os-btn os-btn--ghost"
-          onClick={() => setShowCv(v => !v)}
-          style={{ fontSize: 12 }}
-        >
-          {showCv ? 'Hide CV text' : 'Show CV text'}
-        </button>
+        {/* Extraction warning */}
+        {extractWarn && (
+          <div className="os-raw-warning" style={{ marginBottom: 8 }}>
+            {extractWarn}
+          </div>
+        )}
+
+        {/* Editor / paste area */}
+        {showEditor && (
+          <>
+            <textarea
+              className="os-textarea"
+              value={localCvText}
+              onChange={e => { setLocalCvText(e.target.value); setExtractWarn('') }}
+              placeholder="Paste the client's CV text here, or upload a file above…"
+              rows={20}
+              style={{ minHeight: 280, resize: 'vertical' }}
+            />
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              {isDirty && (
+                <button
+                  className="os-btn os-btn--primary"
+                  onClick={handleSaveCvText}
+                  disabled={saving || !localCvText.trim()}
+                >
+                  {saving ? 'Saving…' : 'Save CV Text'}
+                </button>
+              )}
+              {isDirty && savedCvText && (
+                <button
+                  className="os-btn os-btn--secondary"
+                  onClick={() => { setLocalCvText(savedCvText); setExtractWarn('') }}
+                  disabled={saving}
+                >
+                  Discard changes
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
-      {/* ── Collapsed CV preview ────────────────────────────────────────── */}
-      {showCv && (
-        <div className="os-cv-preview">
-          <pre className="os-cv-preview-text">{cvText}</pre>
+      {/* ── No CV saved + not editing ────────────────────────────────────── */}
+      {!savedCvText && !showEditor && (
+        <div className="os-generate-prompt" style={{ marginBottom: 20 }}>
+          <p className="os-generate-prompt-title">No CV text saved</p>
+          <p className="os-generate-prompt-body">
+            Upload a PDF, DOCX, or TXT file above, or paste the CV text into the
+            editor to get started.
+          </p>
         </div>
       )}
 
-      {/* ── Empty state ─────────────────────────────────────────────────── */}
-      {!hasOutput && !loading && (
+      {/* ── Analyse action bar ───────────────────────────────────────────── */}
+      {savedCvText && (
+        <div className="os-positioning-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button
+              className="os-btn os-btn--primary"
+              onClick={handleAnalyse}
+              disabled={loading || isDirty}
+              title={isDirty ? 'Save CV text first' : undefined}
+            >
+              {loading ? 'Analysing CV…' : hasOutput ? 'Re-analyse CV' : 'Analyse CV'}
+            </button>
+            {isDirty && (
+              <span style={{ fontSize: 12, color: '#b45309' }}>Save CV text first</span>
+            )}
+            {!isDirty && generatedAt && (
+              <span className="os-positioning-meta">Last run {generatedAt}</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Empty analysis state ─────────────────────────────────────────── */}
+      {savedCvText && !hasOutput && !loading && (
         <div className="os-generate-prompt" style={{ marginTop: 16 }}>
           <p className="os-generate-prompt-title">CV ready to analyse</p>
           <p className="os-generate-prompt-body">

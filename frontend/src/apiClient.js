@@ -47,6 +47,21 @@ export const api = {
   deleteOpportunity: (id, oppId)     => req('DELETE', `/clients/${id}/opportunities/${oppId}`),
 
   updateAdvisorBrief:  (id, brief)           => req('PUT',  `/clients/${id}/advisor-brief`, brief,    true),
+
+  // File upload uses FormData — cannot go through the JSON req() helper.
+  // Uses DIRECT_BASE so multipart/form-data bypasses the Vercel proxy entirely.
+  extractCvFile: async (id, file) => {
+    const base = DIRECT_BASE || PROXY_BASE
+    const body = new FormData()
+    body.append('file', file)
+    const res = await fetch(`${base}/clients/${id}/cv/extract-file`, { method: 'POST', body })
+    if (!res.ok) {
+      let message = res.statusText
+      try { const d = await res.json(); message = d.detail || d.message || message } catch (_) {}
+      throw new Error(message)
+    }
+    return res.json()
+  },
   searchTargetContacts: (id, payload)        => req('POST', `/clients/${id}/target-contacts/search`, payload, true),
   createTargetContact:  (id, contact)        => req('POST', `/clients/${id}/target-contacts`, contact,  true),
   updateTargetContact:  (id, cid, contact)   => req('PUT',  `/clients/${id}/target-contacts/${cid}`, contact, true),

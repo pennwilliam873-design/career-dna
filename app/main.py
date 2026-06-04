@@ -1,8 +1,9 @@
+import io
 import os
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -142,6 +143,83 @@ def delete_client_by_id(client_id: str):
     if not delete_client(client_id):
         raise HTTPException(status_code=404, detail="Client not found.")
     return JSONResponse(status_code=200, content={"deleted": True})
+
+
+_CV_FILE_MAX_BYTES = 10 * 1024 * 1024   # 10 MB
+_CV_TEXT_MIN_CHARS = 200                 # below this we warn about scanned PDFs
+
+
+@app.post("/clients/{client_id}/cv/extract-file")
+async def post_extract_cv_file(client_id: str, file: UploadFile = File(...)):
+    record = get_client(client_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Client not found.")
+
+    filename = file.filename or ""
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if ext not in ("pdf", "docx", "txt"):
+        raise HTTPException(
+            status_code=422,
+            detail="Unsupported file type. Please upload a PDF, DOCX, or TXT file.",
+        )
+
+    content = await file.read()
+    if len(content) > _CV_FILE_MAX_BYTES:
+        raise HTTPException(
+            status_code=422,
+            detail="File too large. Maximum size is 10 MB.",
+        )
+
+    text = ""
+    warning = ""
+
+    if ext == "txt":
+        try:
+            text = content.decode("utf-8")
+        except UnicodeDecodeError:
+            text = content.decode("latin-1", errors="replace")
+
+    elif ext == "pdf":
+        try:
+            import pypdf  # noqa: PLC0415
+            reader = pypdf.PdfReader(io.BytesIO(content))
+            pages = [page.extract_text() or "" for page in reader.pages]
+            text = "\n".join(pages).strip()
+        except ImportError:
+            raise HTTPException(status_code=500, detail="PDF extraction library not available.")
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail=f"Could not read PDF: {exc}")
+        if len(text.strip()) < _CV_TEXT_MIN_CHARS:
+            warning = (
+                "We couldn't extract enough text from this PDF. "
+                "It may be scanned or image-based. "
+                "Please paste the CV text manually."
+            )
+
+    elif ext == "docx":
+        try:
+            import docx  # noqa: PLC0415
+            doc = docx.Document(io.BytesIO(content))
+            parts = [p.text for p in doc.paragraphs if p.text.strip()]
+            for table in doc.tables:
+                for row in table.rows:
+                    row_text = " | ".join(
+                        cell.text.strip() for cell in row.cells if cell.text.strip()
+                    )
+                    if row_text:
+                        parts.append(row_text)
+            text = "\n".join(parts).strip()
+        except ImportError:
+            raise HTTPException(status_code=500, detail="DOCX extraction library not available.")
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail=f"Could not read DOCX file: {exc}")
+        if len(text.strip()) < 100:
+            warning = (
+                "Very little text was extracted from this document. "
+                "Please check the file or paste the CV text manually."
+            )
+
+    return JSONResponse(status_code=200, content={"text": text, "warning": warning})
 
 
 @app.post("/clients/{client_id}/analyse-cv")
