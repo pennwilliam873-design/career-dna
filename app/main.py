@@ -19,13 +19,14 @@ from app.models.client import (
     ClientRecord, ClientProfile, CreateClientRequest, UpdateClientRequest,
     MarketRadarRequest, Opportunity, OpportunityRequest,
     SessionNote, ActionItem, SessionNoteRequest, ActionItemRequest,
-    AdvisorBrief,
+    AdvisorBrief, TargetContact, TargetContactRequest, ContactSearchRequest,
 )
 from app.data.storage import list_clients, get_client, create_client, update_client, delete_client
 from app.services.positioning import generate_positioning
 from app.services.cv_intelligence import analyse_cv
 from app.services.market_radar import run_market_radar
 from app.services.advisor_brief import generate_advisor_brief
+from app.services.contact_search import search_contacts
 
 app = FastAPI(title="Career DNA API")
 
@@ -396,6 +397,91 @@ def delete_action(client_id: str, action_id: str):
     record.action_items = [a for a in record.action_items if a.id != action_id]
     if len(record.action_items) == before:
         raise HTTPException(status_code=404, detail="Action item not found.")
+    updated = update_client(record)
+    return JSONResponse(status_code=200, content=updated.model_dump(mode="json"))
+
+
+# ── Target Contact endpoints ──────────────────────────────────────────────────
+
+
+@app.post("/clients/{client_id}/target-contacts/search")
+def post_search_contacts(client_id: str, body: ContactSearchRequest):
+    record = get_client(client_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Client not found.")
+    try:
+        result = search_contacts(
+            company=body.company,
+            role_context=body.role_context,
+            search_focus=body.search_focus,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Contact search failed: {exc}")
+    return JSONResponse(status_code=200, content={
+        "contacts": [
+            {
+                "name": c.name, "title": c.title, "company": c.company,
+                "linkedin_url": c.linkedin_url, "source_url": c.source_url,
+                "why_relevant": c.why_relevant, "suggested_angle": c.suggested_angle,
+                "confidence": c.confidence,
+            }
+            for c in result.contacts
+        ],
+        "search_mode": result.search_mode,
+        "message": result.message,
+    })
+
+
+@app.post("/clients/{client_id}/target-contacts")
+def post_create_contact(client_id: str, body: TargetContactRequest):
+    record = get_client(client_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Client not found.")
+    contact = TargetContact(
+        name=body.name, title=body.title, company=body.company,
+        linkedin_url=body.linkedin_url, source_url=body.source_url,
+        related_opportunity_id=body.related_opportunity_id,
+        why_relevant=body.why_relevant, suggested_angle=body.suggested_angle,
+        confidence=body.confidence, status=body.status, notes=body.notes,
+    )
+    record.target_contacts.append(contact)
+    updated = update_client(record)
+    return JSONResponse(status_code=201, content=updated.model_dump(mode="json"))
+
+
+@app.put("/clients/{client_id}/target-contacts/{contact_id}")
+def put_contact(client_id: str, contact_id: str, body: TargetContactRequest):
+    record = get_client(client_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Client not found.")
+    contact = next((c for c in record.target_contacts if c.id == contact_id), None)
+    if contact is None:
+        raise HTTPException(status_code=404, detail="Contact not found.")
+    contact.name = body.name
+    contact.title = body.title
+    contact.company = body.company
+    contact.linkedin_url = body.linkedin_url
+    contact.source_url = body.source_url
+    contact.related_opportunity_id = body.related_opportunity_id
+    contact.why_relevant = body.why_relevant
+    contact.suggested_angle = body.suggested_angle
+    contact.confidence = body.confidence
+    contact.status = body.status
+    contact.notes = body.notes
+    contact.updated_at = datetime.now(timezone.utc).isoformat()
+    updated = update_client(record)
+    return JSONResponse(status_code=200, content=updated.model_dump(mode="json"))
+
+
+@app.delete("/clients/{client_id}/target-contacts/{contact_id}")
+def delete_contact(client_id: str, contact_id: str):
+    record = get_client(client_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Client not found.")
+    before = len(record.target_contacts)
+    record.target_contacts = [c for c in record.target_contacts if c.id != contact_id]
+    if len(record.target_contacts) == before:
+        raise HTTPException(status_code=404, detail="Contact not found.")
     updated = update_client(record)
     return JSONResponse(status_code=200, content=updated.model_dump(mode="json"))
 

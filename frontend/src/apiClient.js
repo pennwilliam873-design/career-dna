@@ -47,6 +47,10 @@ export const api = {
   deleteOpportunity: (id, oppId)     => req('DELETE', `/clients/${id}/opportunities/${oppId}`),
 
   updateAdvisorBrief:  (id, brief)           => req('PUT',  `/clients/${id}/advisor-brief`, brief,    true),
+  searchTargetContacts: (id, payload)        => req('POST', `/clients/${id}/target-contacts/search`, payload, true),
+  createTargetContact:  (id, contact)        => req('POST', `/clients/${id}/target-contacts`, contact,  true),
+  updateTargetContact:  (id, cid, contact)   => req('PUT',  `/clients/${id}/target-contacts/${cid}`, contact, true),
+  deleteTargetContact:  (id, cid)            => req('DELETE', `/clients/${id}/target-contacts/${cid}`, undefined, true),
 
   // ── Slow AI operations — call Railway directly to bypass Vercel 10s limit ─
   analyseCv:           (id)                  => req('POST', `/clients/${id}/analyse-cv`,            undefined, true),

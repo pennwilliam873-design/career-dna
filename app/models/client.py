@@ -199,6 +199,23 @@ class AdvisorBrief(BaseModel):
     advisor_only_notes: List[str] = Field(default_factory=list)
 
 
+class TargetContact(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str = ""
+    title: str = ""
+    company: str = ""
+    linkedin_url: str = ""
+    source_url: str = ""
+    related_opportunity_id: str = ""
+    why_relevant: str = ""
+    suggested_angle: str = ""
+    confidence: str = "Medium"   # High | Medium | Low
+    status: str = "Not contacted"  # Not contacted | Warm path identified | Contacted | Responded | Parked
+    notes: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
 class SessionNote(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     date: str = ""
@@ -242,6 +259,7 @@ class ClientRecord(BaseModel):
     market_radar_is_complete: Optional[bool] = None
     market_radar_scan_warning: Optional[str] = None
     opportunities: List[Opportunity] = Field(default_factory=list)
+    target_contacts: List[TargetContact] = Field(default_factory=list)
     session_notes: List[SessionNote] = Field(default_factory=list)
     action_items:  List[ActionItem]  = Field(default_factory=list)
     advisor_brief: Optional[AdvisorBrief] = None
@@ -294,3 +312,24 @@ class ActionItemRequest(BaseModel):
     status: str = "To do"
     related_opportunity: str = ""
     advisor_note: str = ""
+
+
+class TargetContactRequest(BaseModel):
+    name: str = ""
+    title: str = ""
+    company: str = ""
+    linkedin_url: str = ""
+    source_url: str = ""
+    related_opportunity_id: str = ""
+    why_relevant: str = ""
+    suggested_angle: str = ""
+    confidence: str = "Medium"
+    status: str = "Not contacted"
+    notes: str = ""
+
+
+class ContactSearchRequest(BaseModel):
+    company: str
+    related_opportunity_id: str = ""
+    role_context: str = ""
+    search_focus: str = ""

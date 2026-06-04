@@ -342,6 +342,35 @@ def _notes_block(record: ClientRecord) -> str:
     return "\n".join(lines)
 
 
+def _contacts_block(record: ClientRecord) -> str:
+    contacts = record.target_contacts or []
+    active = [c for c in contacts if c.status != "Parked"]
+    parked = [c for c in contacts if c.status == "Parked"]
+
+    if not active and not parked:
+        return "[TARGET CONTACTS]\nNo target contacts saved yet."
+
+    conf_rank = {"High": 0, "Medium": 1, "Low": 2}
+    active_sorted = sorted(active, key=lambda c: conf_rank.get(c.confidence, 1))
+
+    lines = ["[TARGET CONTACTS]"]
+    for c in active_sorted[:8]:
+        line = f"  [{c.confidence}] {c.name}"
+        if c.title:
+            line += f" — {c.title}"
+        if c.company:
+            line += f" @ {c.company}"
+        line += f" | {c.status}"
+        lines.append(line)
+        if c.suggested_angle:
+            lines.append(f"    Angle: {c.suggested_angle}")
+
+    if parked:
+        lines.append(f"\nParked: {len(parked)} contact(s)")
+
+    return "\n".join(lines)
+
+
 def _build_context(record: ClientRecord) -> str:
     return "\n\n".join([
         _profile_block(record),
@@ -349,6 +378,7 @@ def _build_context(record: ClientRecord) -> str:
         _positioning_block(record),
         _radar_digest(record),
         _opportunities_block(record),
+        _contacts_block(record),
         _notes_block(record),
     ])
 
