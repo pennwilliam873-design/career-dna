@@ -18,7 +18,6 @@ const TABS = [
   { key: 'opportunities', label: 'Opportunities',   live: true  },
   { key: 'notes',         label: 'Notes & Actions', live: true  },
   { key: 'brief',         label: 'Advisor Brief',   live: true  },
-  { key: 'report',        label: 'Client Report',   live: false },
 ]
 
 const LIVE_KEYS = new Set(TABS.filter(t => t.live).map(t => t.key))
