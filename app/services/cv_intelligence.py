@@ -23,7 +23,7 @@ from app.models.client import ClientProfile, CVIntelligence, LeadershipScale
 
 logger = logging.getLogger(__name__)
 
-_MODEL: str = os.getenv("CV_INTELLIGENCE_MODEL", "claude-haiku-4-5-20251001")
+_MODEL: str = os.getenv("CV_INTELLIGENCE_MODEL", "claude-sonnet-4-6")
 
 
 # ── Anthropic error classifier ────────────────────────────────────────────────
