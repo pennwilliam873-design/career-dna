@@ -41,6 +41,26 @@ def _write_all(records: List[dict]) -> None:
     )
 
 
+def check_connectivity() -> bool:
+    """Read-only reachability check for health endpoints.
+
+    Only inspects the configured storage path and permissions — never
+    creates, modifies, renames or deletes any file or directory, and
+    never reads or returns client content. Three cases:
+      - the data file already exists: check it's read/writable.
+      - the data directory exists but the file doesn't yet (a fresh
+        deploy before the first write): check the directory is
+        read/write/execute-able.
+      - neither exists yet: check the parent directory exists and is
+        writable, i.e. the data directory *could* be created later.
+    """
+    if _CLIENTS_FILE.exists():
+        return os.access(_CLIENTS_FILE, os.R_OK | os.W_OK)
+    if _DATA_DIR.exists():
+        return os.access(_DATA_DIR, os.R_OK | os.W_OK | os.X_OK)
+    return _DATA_DIR.parent.exists() and os.access(_DATA_DIR.parent, os.W_OK | os.X_OK)
+
+
 def list_clients() -> List[ClientRecord]:
     return [ClientRecord(**r) for r in _read_all()]
 

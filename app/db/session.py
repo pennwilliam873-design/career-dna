@@ -18,12 +18,23 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.config import get_database_url
 
 
+# Bounds how long a connection ATTEMPT can take (e.g. an unreachable host
+# that silently drops packets rather than refusing the connection) — without
+# this, a network-level outage could hang a request indefinitely, which
+# matters most for /health, but applies to every Postgres operation.
+_CONNECT_TIMEOUT_SECONDS = 5
+
+
 @functools.lru_cache(maxsize=1)
 def get_engine() -> Engine:
     database_url = get_database_url()
     if not database_url:
         raise RuntimeError("DATABASE_URL is not set; cannot create a database engine.")
-    return create_engine(database_url, pool_pre_ping=True)
+    return create_engine(
+        database_url,
+        pool_pre_ping=True,
+        connect_args={"connect_timeout": _CONNECT_TIMEOUT_SECONDS},
+    )
 
 
 def reset_engine_cache() -> None:
