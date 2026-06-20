@@ -44,3 +44,6 @@ htmlcov/
 # Client data (contains real PII) — was tracked in git, now untracked.
 # The file itself is NOT deleted locally; see git history note.
 data/clients.json
+
+# Local embedded PostgreSQL data directory (scripts/local_postgres.py)
+.pgdata/

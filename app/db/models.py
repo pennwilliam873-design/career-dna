@@ -9,13 +9,20 @@ advisor_brief) stay as JSONB blobs on the client row, matching how the app
 already treats them today: written wholesale by one service call, read
 wholesale by the frontend, never queried by sub-field.
 
-Dormant: nothing in app/main.py imports this module yet. It only becomes
-live once Stage 2 wires up a postgres-backed storage layer behind
-STORAGE_BACKEND=postgres (see app/config.py).
+Only used when STORAGE_BACKEND=postgres (see app/config.py and
+app/data/storage_postgres.py); the JSON backend remains the default and
+does not import this module.
+
+The four operational list entities (opportunities, target_contacts,
+session_notes, action_items) carry an explicit `sort_order` column.
+PostgreSQL does not guarantee row order the way a JSON list does, so the
+storage adapter always reads these back ordered by sort_order (with
+created_at, id as deterministic tie-breakers) to preserve the exact
+ordering clients.json has today.
 """
 from __future__ import annotations
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
@@ -65,16 +72,28 @@ class Client(Base):
     advisor_brief_edited_at = Column(DateTime(timezone=True), nullable=True)
 
     opportunities = relationship(
-        "Opportunity", back_populates="client", cascade="all, delete-orphan"
+        "Opportunity",
+        back_populates="client",
+        cascade="all, delete-orphan",
+        order_by="Opportunity.sort_order, Opportunity.created_at, Opportunity.id",
     )
     target_contacts = relationship(
-        "TargetContact", back_populates="client", cascade="all, delete-orphan"
+        "TargetContact",
+        back_populates="client",
+        cascade="all, delete-orphan",
+        order_by="TargetContact.sort_order, TargetContact.created_at, TargetContact.id",
     )
     session_notes = relationship(
-        "SessionNote", back_populates="client", cascade="all, delete-orphan"
+        "SessionNote",
+        back_populates="client",
+        cascade="all, delete-orphan",
+        order_by="SessionNote.sort_order, SessionNote.created_at, SessionNote.id",
     )
     action_items = relationship(
-        "ActionItem", back_populates="client", cascade="all, delete-orphan"
+        "ActionItem",
+        back_populates="client",
+        cascade="all, delete-orphan",
+        order_by="ActionItem.sort_order, ActionItem.created_at, ActionItem.id",
     )
 
 
@@ -100,11 +119,14 @@ class Opportunity(Base):
     next_action = Column(Text, nullable=False, default="")
     advisor_note = Column(Text, nullable=False, default="")
     sources = Column(JSONB, nullable=False, default=list)
+    sort_order = Column(Integer, nullable=False, default=0)
 
     created_at = Column(DateTime(timezone=True), nullable=False)
     updated_at = Column(DateTime(timezone=True), nullable=False)
 
     client = relationship("Client", back_populates="opportunities")
+
+    __table_args__ = (Index("ix_opportunities_client_id_sort_order", "client_id", "sort_order"),)
 
 
 class TargetContact(Base):
@@ -128,11 +150,14 @@ class TargetContact(Base):
     confidence = Column(Text, nullable=False, default="Medium")
     status = Column(Text, nullable=False, default="Not contacted")
     notes = Column(Text, nullable=False, default="")
+    sort_order = Column(Integer, nullable=False, default=0)
 
     created_at = Column(DateTime(timezone=True), nullable=False)
     updated_at = Column(DateTime(timezone=True), nullable=False)
 
     client = relationship("Client", back_populates="target_contacts")
+
+    __table_args__ = (Index("ix_target_contacts_client_id_sort_order", "client_id", "sort_order"),)
 
 
 class SessionNote(Base):
@@ -147,11 +172,14 @@ class SessionNote(Base):
     title = Column(Text, nullable=False, default="")
     notes = Column(Text, nullable=False, default="")
     advisor_only = Column(Boolean, nullable=False, default=False)
+    sort_order = Column(Integer, nullable=False, default=0)
 
     created_at = Column(DateTime(timezone=True), nullable=False)
     updated_at = Column(DateTime(timezone=True), nullable=False)
 
     client = relationship("Client", back_populates="session_notes")
+
+    __table_args__ = (Index("ix_session_notes_client_id_sort_order", "client_id", "sort_order"),)
 
 
 class ActionItem(Base):
@@ -172,8 +200,11 @@ class ActionItem(Base):
     due_date = Column(Text, nullable=False, default="")
     status = Column(Text, nullable=False, default="To do")
     advisor_note = Column(Text, nullable=False, default="")
+    sort_order = Column(Integer, nullable=False, default=0)
 
     created_at = Column(DateTime(timezone=True), nullable=False)
     updated_at = Column(DateTime(timezone=True), nullable=False)
 
     client = relationship("Client", back_populates="action_items")
+
+    __table_args__ = (Index("ix_action_items_client_id_sort_order", "client_id", "sort_order"),)

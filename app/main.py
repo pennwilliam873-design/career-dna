@@ -22,7 +22,7 @@ from app.models.client import (
     SessionNote, ActionItem, SessionNoteRequest, ActionItemRequest,
     AdvisorBrief, TargetContact, TargetContactRequest, ContactSearchRequest,
 )
-from app.data.storage import list_clients, get_client, create_client, update_client, delete_client
+from app.data.storage_selector import list_clients, get_client, create_client, update_client, delete_client
 from app.services.positioning import generate_positioning
 from app.services.cv_intelligence import analyse_cv
 from app.services.market_radar import run_market_radar

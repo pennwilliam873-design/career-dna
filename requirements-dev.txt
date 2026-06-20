@@ -1,0 +1,7 @@
+# Dev/test-only dependencies — not installed in production (Railway).
+-r requirements.txt
+
+# Embedded PostgreSQL for local development and integration tests.
+# Bundles a real Postgres 16 binary; no Docker or Homebrew required.
+# See scripts/local_postgres.py.
+pgserver>=0.1.4,<0.2
