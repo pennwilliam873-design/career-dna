@@ -22,7 +22,10 @@ from app.models.client import (
     SessionNote, ActionItem, SessionNoteRequest, ActionItemRequest,
     AdvisorBrief, TargetContact, TargetContactRequest, ContactSearchRequest,
 )
-from app.data.storage import list_clients, get_client, create_client, update_client, delete_client
+from app.data.storage_selector import list_clients, get_client, create_client, update_client, delete_client
+from app.config import get_storage_backend, StorageConfigError
+from app.data.storage import check_connectivity as _json_storage_connectivity
+from app.db.session import check_connectivity as _postgres_storage_connectivity
 from app.services.positioning import generate_positioning
 from app.services.cv_intelligence import analyse_cv
 from app.services.market_radar import run_market_radar
@@ -65,7 +68,33 @@ def index():
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    """Minimal health probe, safe to expose publicly (e.g. Railway health
+    checks). Never returns DATABASE_URL, credentials, file paths, client
+    counts, or any client content — only status, the configured storage
+    backend name, and whether that backend is currently reachable."""
+    try:
+        backend = get_storage_backend()
+    except StorageConfigError:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "error", "storage_backend": "unconfigured", "storage_connected": False},
+        )
+
+    try:
+        connected = (
+            _postgres_storage_connectivity() if backend == "postgres" else _json_storage_connectivity()
+        )
+    except Exception:
+        connected = False
+
+    return JSONResponse(
+        status_code=200 if connected else 503,
+        content={
+            "status": "ok" if connected else "error",
+            "storage_backend": backend,
+            "storage_connected": connected,
+        },
+    )
 
 
 @app.post("/generate-dna", response_model=None, dependencies=[Depends(verify_trial_key)])
