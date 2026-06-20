@@ -6,3 +6,11 @@ anthropic>=0.40.0,<1.0.0
 httpx
 pypdf
 python-docx
+
+# PostgreSQL storage backend (dormant until STORAGE_BACKEND=postgres)
+sqlalchemy>=2.0,<3.0
+alembic>=1.13,<2.0
+psycopg2-binary>=2.9,<3.0
+
+# Testing
+pytest>=8.0,<9.0
