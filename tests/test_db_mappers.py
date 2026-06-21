@@ -47,6 +47,73 @@ def test_empty_minimal_client_round_trip(pg_database):
     assert fetched.action_items == []
 
 
+def test_target_contact_hidden_market_map_fields_round_trip(pg_database):
+    record = ClientRecord(
+        profile=ClientProfile(name="HMM"),
+        target_contacts=[
+            TargetContact(
+                name="Sarah Jones",
+                company="Qantas",
+                network_source="Client Network",
+                relationship_owner="Client",
+                relationship_strength="Strong",
+                role_in_search="Bridge contact",
+                target_company="Qantas",
+                target_sector="Aviation",
+                linked_market_radar_company="Qantas",
+                linked_market_radar_tier="Tier 1",
+                bridge_to="Qantas transformation network",
+                warm_path_status="Warm path known",
+                ask_type="Introduction",
+                status="Active conversation",
+                next_action="Reconnect and ask for an intro",
+                next_action_owner="Advisor",
+                next_action_due_date="2026-07-01",
+                advisor_only=True,
+                advisor_notes="Sensitive context — handle carefully",
+                client_shareable=False,
+                approved_for_outreach=True,
+                sensitive=True,
+                include_in_advisor_brief=True,
+            )
+        ],
+    )
+    created = pg.create_client(record)
+    fetched = pg.get_client(created.id)
+
+    c = fetched.target_contacts[0]
+    assert c.network_source == "Client Network"
+    assert c.relationship_owner == "Client"
+    assert c.role_in_search == "Bridge contact"
+    assert c.bridge_to == "Qantas transformation network"
+    assert c.warm_path_status == "Warm path known"
+    assert c.next_action_due_date == "2026-07-01"
+    assert c.advisor_only is True
+    assert c.advisor_notes == "Sensitive context — handle carefully"
+    assert c.approved_for_outreach is True
+    assert c.sensitive is True
+    assert c.include_in_advisor_brief is True
+    assert c.client_shareable is False
+
+
+def test_target_contact_hidden_market_map_fields_default_safely(pg_database):
+    """Existing-shape contacts (no Hidden Market Map fields set) must still
+    load with safe defaults — this is what protects pre-migration rows."""
+    record = ClientRecord(
+        profile=ClientProfile(name="Legacy Contact"),
+        target_contacts=[TargetContact(name="Old Contact", company="OldCo")],
+    )
+    created = pg.create_client(record)
+    fetched = pg.get_client(created.id)
+
+    c = fetched.target_contacts[0]
+    assert c.network_source == "Unknown"
+    assert c.relationship_owner == "Unknown"
+    assert c.advisor_only is True
+    assert c.client_shareable is False
+    assert c.warm_path_status == "Unknown"
+
+
 def test_fully_populated_client_round_trip(pg_database):
     profile = ClientProfile(
         name="Full Client",

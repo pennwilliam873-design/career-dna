@@ -19,6 +19,7 @@ function briefToForm(b) {
     challenges_text:                (b.advisor_challenges || []).join('\n'),
     next_actions_text:              (b.recommended_next_actions || []).join('\n'),
     advisor_notes_text:             (b.advisor_only_notes || []).join('\n'),
+    network_strategy_summary:       b.network_strategy_summary || '',
   }
 }
 
@@ -35,6 +36,7 @@ function formToBrief(f) {
     advisor_challenges:         splitLines(f.challenges_text),
     recommended_next_actions:   splitLines(f.next_actions_text),
     advisor_only_notes:         splitLines(f.advisor_notes_text),
+    network_strategy_summary:   f.network_strategy_summary,
   }
 }
 
@@ -212,6 +214,13 @@ export default function AdvisorBriefTab({ client, onUpdate }) {
             value={editForm.key_positioning_insights_text}
             onChange={v => setField('key_positioning_insights_text', v)}
             minHeight={130}
+          />
+
+          <BriefEditField
+            label="Network Strategy (Hidden Market Map)"
+            value={editForm.network_strategy_summary}
+            onChange={v => setField('network_strategy_summary', v)}
+            minHeight={70}
           />
 
           {/* Priority Opportunities — per-subfield editing */}
@@ -420,6 +429,13 @@ export default function AdvisorBriefTab({ client, onUpdate }) {
                 </ul>
               </div>
             </>
+          )}
+
+          {b.network_strategy_summary && (
+            <div className="os-card os-card--accent-left">
+              <p className="os-card-label">Network Strategy — Hidden Market Map</p>
+              <p className="os-card-value">{b.network_strategy_summary}</p>
+            </div>
           )}
 
           {b.priority_opportunities?.length > 0 && (

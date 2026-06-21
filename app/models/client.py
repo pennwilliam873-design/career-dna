@@ -197,9 +197,18 @@ class AdvisorBrief(BaseModel):
     advisor_challenges: List[str] = Field(default_factory=list)
     recommended_next_actions: List[str] = Field(default_factory=list)
     advisor_only_notes: List[str] = Field(default_factory=list)
+    network_strategy_summary: str = ""  # Hidden Market Map synthesis — route into the market, main gap
 
 
 class TargetContact(BaseModel):
+    """A node in the Hidden Market Map.
+
+    Legacy fields (name..notes) predate the Hidden Market Map and are kept
+    as-is for backward compatibility. Everything below them is additive —
+    all plain `str`/`bool` with safe defaults (never `Literal`/enum-enforced)
+    so existing rows with older values never fail validation on load.
+    """
+
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str = ""
     title: str = ""
@@ -210,8 +219,51 @@ class TargetContact(BaseModel):
     why_relevant: str = ""
     suggested_angle: str = ""
     confidence: str = "Medium"   # High | Medium | Low
-    status: str = "Not contacted"  # Not contacted | Warm path identified | Contacted | Responded | Parked
+    status: str = "To assess"    # To assess | Warm path needed | Ready for outreach | Contacted | Meeting booked | Active conversation | Parked | Not relevant
     notes: str = ""
+
+    # ── Network / source ──────────────────────────────────────────────────
+    network_source: str = "Unknown"          # Client Network | Advisor Network | ViaNova Suggestion | Unknown
+    relationship_owner: str = "Unknown"      # Client | Advisor | Both | Third-party | Unknown
+    relationship_to_client: str = ""
+    relationship_to_advisor: str = ""
+    relationship_strength: str = "Unknown"   # Strong | Medium | Weak | Dormant | Unknown
+    last_contacted_at: str = ""
+
+    # ── Strategic ────────────────────────────────────────────────────────
+    role_in_search: str = "Unknown"          # Decision-maker | Introducer | Bridge contact | Market intelligence | Search consultant | Board/investor connector | Potential sponsor | Former colleague | Peer | Other | Unknown
+    target_company: str = ""
+    target_sector: str = ""
+    linked_market_radar_company: str = ""
+    linked_market_radar_tier: str = ""
+    linked_opportunity_id: str = ""
+    linked_opportunity_title: str = ""
+    relevance_rationale: str = ""
+    opportunity_path_hypothesis: str = ""
+    can_make_intro: str = "unknown"          # yes | no | unknown
+    bridge_to: str = ""
+    warm_path_status: str = "Unknown"        # Warm path known | Possible warm path | Warm path needed | Cold only | Unknown
+    ask_type: str = "Unknown"                # Market intelligence | Introduction | Reconnect | Search mandate | Company insight | Role discussion | Direct opportunity | Referral | Other | Unknown
+    suggested_approach: str = ""
+
+    # ── Execution ────────────────────────────────────────────────────────
+    next_action: str = ""
+    next_action_owner: str = "Advisor"       # Advisor | Client | Both
+    next_action_due_date: str = ""
+    follow_up_date: str = ""
+    outreach_channel: str = ""
+    response_notes: str = ""
+
+    # ── Visibility / privacy ─────────────────────────────────────────────
+    advisor_only: bool = True
+    advisor_notes: str = ""
+    client_shareable: bool = False
+    approved_for_outreach: bool = False
+    sensitive: bool = False
+    do_not_contact_yet: bool = False
+    include_in_advisor_brief: bool = False
+    include_in_weekly_plan: bool = False
+
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -324,8 +376,46 @@ class TargetContactRequest(BaseModel):
     why_relevant: str = ""
     suggested_angle: str = ""
     confidence: str = "Medium"
-    status: str = "Not contacted"
+    status: str = "To assess"
     notes: str = ""
+
+    network_source: str = "Unknown"
+    relationship_owner: str = "Unknown"
+    relationship_to_client: str = ""
+    relationship_to_advisor: str = ""
+    relationship_strength: str = "Unknown"
+    last_contacted_at: str = ""
+
+    role_in_search: str = "Unknown"
+    target_company: str = ""
+    target_sector: str = ""
+    linked_market_radar_company: str = ""
+    linked_market_radar_tier: str = ""
+    linked_opportunity_id: str = ""
+    linked_opportunity_title: str = ""
+    relevance_rationale: str = ""
+    opportunity_path_hypothesis: str = ""
+    can_make_intro: str = "unknown"
+    bridge_to: str = ""
+    warm_path_status: str = "Unknown"
+    ask_type: str = "Unknown"
+    suggested_approach: str = ""
+
+    next_action: str = ""
+    next_action_owner: str = "Advisor"
+    next_action_due_date: str = ""
+    follow_up_date: str = ""
+    outreach_channel: str = ""
+    response_notes: str = ""
+
+    advisor_only: bool = True
+    advisor_notes: str = ""
+    client_shareable: bool = False
+    approved_for_outreach: bool = False
+    sensitive: bool = False
+    do_not_contact_yet: bool = False
+    include_in_advisor_brief: bool = False
+    include_in_weekly_plan: bool = False
 
 
 class ContactSearchRequest(BaseModel):

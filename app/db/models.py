@@ -148,9 +148,51 @@ class TargetContact(Base):
     why_relevant = Column(Text, nullable=False, default="")
     suggested_angle = Column(Text, nullable=False, default="")
     confidence = Column(Text, nullable=False, default="Medium")
-    status = Column(Text, nullable=False, default="Not contacted")
+    status = Column(Text, nullable=False, default="To assess")
     notes = Column(Text, nullable=False, default="")
     sort_order = Column(Integer, nullable=False, default=0)
+
+    # ── Hidden Market Map: network / source ─────────────────────────────
+    network_source = Column(Text, nullable=False, default="Unknown")
+    relationship_owner = Column(Text, nullable=False, default="Unknown")
+    relationship_to_client = Column(Text, nullable=False, default="")
+    relationship_to_advisor = Column(Text, nullable=False, default="")
+    relationship_strength = Column(Text, nullable=False, default="Unknown")
+    last_contacted_at = Column(Text, nullable=False, default="")
+
+    # ── Hidden Market Map: strategic ─────────────────────────────────────
+    role_in_search = Column(Text, nullable=False, default="Unknown")
+    target_company = Column(Text, nullable=False, default="")
+    target_sector = Column(Text, nullable=False, default="")
+    linked_market_radar_company = Column(Text, nullable=False, default="")
+    linked_market_radar_tier = Column(Text, nullable=False, default="")
+    linked_opportunity_id = Column(Text, nullable=False, default="")
+    linked_opportunity_title = Column(Text, nullable=False, default="")
+    relevance_rationale = Column(Text, nullable=False, default="")
+    opportunity_path_hypothesis = Column(Text, nullable=False, default="")
+    can_make_intro = Column(Text, nullable=False, default="unknown")
+    bridge_to = Column(Text, nullable=False, default="")
+    warm_path_status = Column(Text, nullable=False, default="Unknown")
+    ask_type = Column(Text, nullable=False, default="Unknown")
+    suggested_approach = Column(Text, nullable=False, default="")
+
+    # ── Hidden Market Map: execution ─────────────────────────────────────
+    next_action = Column(Text, nullable=False, default="")
+    next_action_owner = Column(Text, nullable=False, default="Advisor")
+    next_action_due_date = Column(Text, nullable=False, default="")
+    follow_up_date = Column(Text, nullable=False, default="")
+    outreach_channel = Column(Text, nullable=False, default="")
+    response_notes = Column(Text, nullable=False, default="")
+
+    # ── Hidden Market Map: visibility / privacy ──────────────────────────
+    advisor_only = Column(Boolean, nullable=False, default=True)
+    advisor_notes = Column(Text, nullable=False, default="")
+    client_shareable = Column(Boolean, nullable=False, default=False)
+    approved_for_outreach = Column(Boolean, nullable=False, default=False)
+    sensitive = Column(Boolean, nullable=False, default=False)
+    do_not_contact_yet = Column(Boolean, nullable=False, default=False)
+    include_in_advisor_brief = Column(Boolean, nullable=False, default=False)
+    include_in_weekly_plan = Column(Boolean, nullable=False, default=False)
 
     created_at = Column(DateTime(timezone=True), nullable=False)
     updated_at = Column(DateTime(timezone=True), nullable=False)

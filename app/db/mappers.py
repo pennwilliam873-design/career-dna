@@ -218,6 +218,44 @@ def orm_to_opportunity(row: OpportunityORM) -> Opportunity:
     )
 
 
+_TARGET_CONTACT_HMM_FIELDS = (
+    "network_source",
+    "relationship_owner",
+    "relationship_to_client",
+    "relationship_to_advisor",
+    "relationship_strength",
+    "last_contacted_at",
+    "role_in_search",
+    "target_company",
+    "target_sector",
+    "linked_market_radar_company",
+    "linked_market_radar_tier",
+    "linked_opportunity_id",
+    "linked_opportunity_title",
+    "relevance_rationale",
+    "opportunity_path_hypothesis",
+    "can_make_intro",
+    "bridge_to",
+    "warm_path_status",
+    "ask_type",
+    "suggested_approach",
+    "next_action",
+    "next_action_owner",
+    "next_action_due_date",
+    "follow_up_date",
+    "outreach_channel",
+    "response_notes",
+    "advisor_only",
+    "advisor_notes",
+    "client_shareable",
+    "approved_for_outreach",
+    "sensitive",
+    "do_not_contact_yet",
+    "include_in_advisor_brief",
+    "include_in_weekly_plan",
+)
+
+
 def target_contact_to_orm_kwargs(
     tc: TargetContact,
     client_id: str,
@@ -241,6 +279,7 @@ def target_contact_to_orm_kwargs(
         created_at=iso_to_dt(tc.created_at),
         updated_at=iso_to_dt(tc.updated_at),
         sort_order=sort_order,
+        **{field: getattr(tc, field) for field in _TARGET_CONTACT_HMM_FIELDS},
     )
 
 
@@ -260,6 +299,7 @@ def orm_to_target_contact(row: TargetContactORM) -> TargetContact:
         notes=row.notes,
         created_at=dt_to_iso(row.created_at),
         updated_at=dt_to_iso(row.updated_at),
+        **{field: getattr(row, field) for field in _TARGET_CONTACT_HMM_FIELDS},
     )
 
 

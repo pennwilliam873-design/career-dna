@@ -342,31 +342,85 @@ def _notes_block(record: ClientRecord) -> str:
     return "\n".join(lines)
 
 
-def _contacts_block(record: ClientRecord) -> str:
-    contacts = record.target_contacts or []
-    active = [c for c in contacts if c.status != "Parked"]
-    parked = [c for c in contacts if c.status == "Parked"]
+def _contact_opportunity_path(c) -> str:
+    """Builds a one-line opportunity path, e.g. "Client -> Sarah Jones -> Qantas
+    transformation network", from stored fields — no graph data structure needed."""
+    owner = {
+        "Client": "Client", "Advisor": "Advisor", "Both": "Client & Advisor",
+        "Third-party": "Third-party",
+    }.get(c.relationship_owner, "Unknown")
+    destination = (
+        c.opportunity_path_hypothesis or c.bridge_to
+        or c.target_company or c.linked_market_radar_company
+        or c.linked_opportunity_title or "hidden market"
+    )
+    return f"{owner} -> {c.name or 'Unnamed contact'} -> {destination}"
 
-    if not active and not parked:
-        return "[TARGET CONTACTS]\nNo target contacts saved yet."
+
+def _contacts_block(record: ClientRecord) -> str:
+    """Hidden Market Map digest for the brief — a prioritised, capped subset,
+    never every contact. Priority signals: explicit advisor curation
+    (include_in_advisor_brief), approval for outreach, an identified warm
+    path, an active conversation, and a relevance rationale/confidence."""
+    contacts = record.target_contacts or []
+    if not contacts:
+        return "[HIDDEN MARKET MAP]\nNo target contacts mapped yet."
+
+    relevant = [c for c in contacts if c.status not in ("Parked", "Not relevant")]
+
+    source_counts: dict = {}
+    for c in contacts:
+        source_counts[c.network_source or "Unknown"] = source_counts.get(c.network_source or "Unknown", 0) + 1
+    warm_paths = [c for c in relevant if c.warm_path_status in ("Warm path known", "Possible warm path")]
+    approved = [c for c in relevant if c.approved_for_outreach]
+    active_conversations = [c for c in relevant if c.status == "Active conversation"]
 
     conf_rank = {"High": 0, "Medium": 1, "Low": 2}
-    active_sorted = sorted(active, key=lambda c: conf_rank.get(c.confidence, 1))
 
-    lines = ["[TARGET CONTACTS]"]
-    for c in active_sorted[:8]:
-        line = f"  [{c.confidence}] {c.name}"
-        if c.title:
-            line += f" — {c.title}"
-        if c.company:
-            line += f" @ {c.company}"
-        line += f" | {c.status}"
-        lines.append(line)
-        if c.suggested_angle:
-            lines.append(f"    Angle: {c.suggested_angle}")
+    def priority_score(c) -> tuple:
+        return (
+            0 if c.include_in_advisor_brief else 1,
+            0 if c.warm_path_status == "Warm path known" else (1 if c.warm_path_status == "Possible warm path" else 2),
+            0 if c.approved_for_outreach else 1,
+            0 if c.status == "Active conversation" else 1,
+            conf_rank.get(c.confidence, 1),
+        )
 
+    prioritised = sorted(relevant, key=priority_score)[:8]
+
+    lines = ["[HIDDEN MARKET MAP]"]
+    lines.append(
+        "Network composition: "
+        + ", ".join(f"{k}: {v}" for k, v in sorted(source_counts.items()))
+    )
+    lines.append(
+        f"Warm paths identified: {len(warm_paths)} | Approved for outreach: {len(approved)} "
+        f"| Active conversations: {len(active_conversations)}"
+    )
+
+    if prioritised:
+        lines.append("\nPriority contacts:")
+        for c in prioritised:
+            line = f"  [{c.network_source}] {c.name}"
+            if c.title:
+                line += f" — {c.title}"
+            if c.company:
+                line += f" @ {c.company}"
+            line += f" | {c.status}"
+            if c.role_in_search and c.role_in_search != "Unknown":
+                line += f" | role: {c.role_in_search}"
+            if c.warm_path_status and c.warm_path_status != "Unknown":
+                line += f" | {c.warm_path_status}"
+            lines.append(line)
+            if c.relevance_rationale or c.why_relevant:
+                lines.append(f"    Why: {c.relevance_rationale or c.why_relevant}")
+            if c.next_action:
+                lines.append(f"    Next action ({c.next_action_owner}): {c.next_action}")
+            lines.append(f"    Path: {_contact_opportunity_path(c)}")
+
+    parked = [c for c in contacts if c.status in ("Parked", "Not relevant")]
     if parked:
-        lines.append(f"\nParked: {len(parked)} contact(s)")
+        lines.append(f"\nParked / not relevant: {len(parked)} contact(s)")
 
     return "\n".join(lines)
 
@@ -495,12 +549,25 @@ _TOOL = {
                     "perception risks, negotiation position, timing pressures. Under 25 words each."
                 ),
             },
+            "network_strategy_summary": {
+                "type": "string",
+                "description": (
+                    "2-3 sentences synthesising the Hidden Market Map: where the strongest route "
+                    "into the hidden market currently comes from (client network, advisor network, "
+                    "or ViaNova suggestions), and the main gap in coverage. Example: 'The strongest "
+                    "route into the hidden market appears to be through the client's former "
+                    "infrastructure contacts and the advisor's board network. Main gap: limited "
+                    "direct PE-backed services contacts.' Do not list individual contacts by name "
+                    "unless essential. Single line, no newlines."
+                ),
+            },
         },
         "required": [
             "brief_summary", "client_situation", "session_focus",
             "key_positioning_insights", "priority_opportunities",
             "market_signals_to_discuss", "questions_to_ask_client",
             "advisor_challenges", "recommended_next_actions", "advisor_only_notes",
+            "network_strategy_summary",
         ],
     },
 }
@@ -555,7 +622,11 @@ Risk / watch out: [main friction or gap]
 
 ## Advisor Notes (Not for Client)
 - [sensitive observation: blind spot, perception risk, negotiation context]
-- [advisor-only note]"""
+- [advisor-only note]
+
+## Network Strategy
+[2-3 sentences: where the strongest route into the hidden market currently comes from
+(client network, advisor network, or ViaNova suggestions), and the main gap in coverage.]"""
 
 
 # ── Prompt builder ────────────────────────────────────────────────────────────
@@ -640,6 +711,7 @@ def _call_tool_use(anthropic_client, prompt: str) -> Optional[AdvisorBrief]:
         advisor_challenges=lst("advisor_challenges"),
         recommended_next_actions=lst("recommended_next_actions"),
         advisor_only_notes=lst("advisor_only_notes"),
+        network_strategy_summary=s("network_strategy_summary"),
     )
 
 

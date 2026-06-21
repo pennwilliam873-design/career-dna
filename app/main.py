@@ -539,18 +539,15 @@ def post_search_contacts(client_id: str, body: ContactSearchRequest):
     })
 
 
+_TARGET_CONTACT_REQUEST_FIELDS = list(TargetContactRequest.model_fields.keys())
+
+
 @app.post("/clients/{client_id}/target-contacts")
 def post_create_contact(client_id: str, body: TargetContactRequest):
     record = get_client(client_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Client not found.")
-    contact = TargetContact(
-        name=body.name, title=body.title, company=body.company,
-        linkedin_url=body.linkedin_url, source_url=body.source_url,
-        related_opportunity_id=body.related_opportunity_id,
-        why_relevant=body.why_relevant, suggested_angle=body.suggested_angle,
-        confidence=body.confidence, status=body.status, notes=body.notes,
-    )
+    contact = TargetContact(**{f: getattr(body, f) for f in _TARGET_CONTACT_REQUEST_FIELDS})
     record.target_contacts.append(contact)
     updated = update_client(record)
     return JSONResponse(status_code=201, content=updated.model_dump(mode="json"))
@@ -564,17 +561,8 @@ def put_contact(client_id: str, contact_id: str, body: TargetContactRequest):
     contact = next((c for c in record.target_contacts if c.id == contact_id), None)
     if contact is None:
         raise HTTPException(status_code=404, detail="Contact not found.")
-    contact.name = body.name
-    contact.title = body.title
-    contact.company = body.company
-    contact.linkedin_url = body.linkedin_url
-    contact.source_url = body.source_url
-    contact.related_opportunity_id = body.related_opportunity_id
-    contact.why_relevant = body.why_relevant
-    contact.suggested_angle = body.suggested_angle
-    contact.confidence = body.confidence
-    contact.status = body.status
-    contact.notes = body.notes
+    for f in _TARGET_CONTACT_REQUEST_FIELDS:
+        setattr(contact, f, getattr(body, f))
     contact.updated_at = datetime.now(timezone.utc).isoformat()
     updated = update_client(record)
     return JSONResponse(status_code=200, content=updated.model_dump(mode="json"))
