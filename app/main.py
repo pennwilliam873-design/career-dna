@@ -21,6 +21,7 @@ from app.models.client import (
     MarketRadarRequest, Opportunity, OpportunityRequest,
     SessionNote, ActionItem, SessionNoteRequest, ActionItemRequest,
     AdvisorBrief, TargetContact, TargetContactRequest, ContactSearchRequest,
+    ExtractFromNotesRequest,
 )
 from app.data.storage_selector import list_clients, get_client, create_client, update_client, delete_client
 from app.config import get_storage_backend, StorageConfigError
@@ -31,6 +32,7 @@ from app.services.cv_intelligence import analyse_cv
 from app.services.market_radar import run_market_radar
 from app.services.advisor_brief import generate_advisor_brief
 from app.services.contact_search import search_contacts
+from app.services.notes_extraction import extract_network_from_notes
 
 app = FastAPI(title="Career DNA API")
 
@@ -536,6 +538,58 @@ def post_search_contacts(client_id: str, body: ContactSearchRequest):
         ],
         "search_mode": result.search_mode,
         "message": result.message,
+    })
+
+
+@app.post("/clients/{client_id}/target-contacts/extract-from-notes")
+def post_extract_from_notes(client_id: str, body: ExtractFromNotesRequest):
+    record = get_client(client_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Client not found.")
+    if not body.notes.strip():
+        raise HTTPException(status_code=422, detail="Notes are required.")
+    try:
+        result = extract_network_from_notes(record, body.notes)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Extraction failed: {exc}")
+    return JSONResponse(status_code=200, content={
+        "suggested_contacts": [
+            {
+                "name": c.name,
+                "current_title": c.current_title,
+                "company": c.company,
+                "network_source": c.network_source,
+                "relationship_owner": c.relationship_owner,
+                "relationship_to_client": c.relationship_to_client,
+                "relationship_to_advisor": c.relationship_to_advisor,
+                "relationship_strength": c.relationship_strength,
+                "role_in_search": c.role_in_search,
+                "target_company": c.target_company,
+                "target_sector": c.target_sector,
+                "bridge_to": c.bridge_to,
+                "warm_path_status": c.warm_path_status,
+                "ask_type": c.ask_type,
+                "suggested_approach": c.suggested_approach,
+                "opportunity_path_hypothesis": c.opportunity_path_hypothesis,
+                "next_action": c.next_action,
+                "next_action_owner": c.next_action_owner,
+                "status": c.status,
+                "advisor_only": c.advisor_only,
+                "client_shareable": c.client_shareable,
+                "approved_for_outreach": c.approved_for_outreach,
+                "include_in_advisor_brief": c.include_in_advisor_brief,
+                "include_in_weekly_plan": c.include_in_weekly_plan,
+                "missing_information": c.missing_information,
+                "follow_up_questions": c.follow_up_questions,
+                "confidence": c.confidence,
+                "evidence_from_notes": c.evidence_from_notes,
+            }
+            for c in result.suggested_contacts
+        ],
+        "network_insights": result.network_insights,
+        "recommended_follow_up_questions": result.recommended_follow_up_questions,
     })
 
 

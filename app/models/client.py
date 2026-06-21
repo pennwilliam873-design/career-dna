@@ -423,3 +423,7 @@ class ContactSearchRequest(BaseModel):
     related_opportunity_id: str = ""
     role_context: str = ""
     search_focus: str = ""
+
+
+class ExtractFromNotesRequest(BaseModel):
+    notes: str = ""

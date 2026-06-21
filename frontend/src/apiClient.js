@@ -63,6 +63,7 @@ export const api = {
     return res.json()
   },
   searchTargetContacts: (id, payload)        => req('POST', `/clients/${id}/target-contacts/search`, payload, true),
+  extractFromNotes:     (id, notes)          => req('POST', `/clients/${id}/target-contacts/extract-from-notes`, { notes }, true),
   createTargetContact:  (id, contact)        => req('POST', `/clients/${id}/target-contacts`, contact,  true),
   updateTargetContact:  (id, cid, contact)   => req('PUT',  `/clients/${id}/target-contacts/${cid}`, contact, true),
   deleteTargetContact:  (id, cid)            => req('DELETE', `/clients/${id}/target-contacts/${cid}`, undefined, true),

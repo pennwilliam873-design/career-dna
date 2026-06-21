@@ -1566,6 +1566,45 @@ body {
 .os-hmm-pill--warn    { background: #fff1f2; color: #be123c; border: 1px solid #fecdd3; }
 .os-hmm-pill--success { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
 .os-hmm-pill--muted   { background: #f8fafc; color: #94a3b8; border: 1px solid #e2e8f0; }
+.os-hmm-pill--source-client  { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+.os-hmm-pill--source-advisor { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+.os-hmm-pill--source-vianova { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+
+/* Subtle text-link button — "Add strategy details" / "Show advanced fields" */
+.os-hmm-link-btn {
+  background: none;
+  border: none;
+  padding: 4px 0;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  text-align: left;
+}
+.os-hmm-link-btn:hover { color: #1e293b; text-decoration: underline; }
+.os-hmm-link-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Collapsible advanced section toggle, inside the contact form */
+.os-hmm-section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: none;
+  border: none;
+  border-top: 1px solid #e2e8f0;
+  padding: 10px 0 0;
+  margin-top: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #475569;
+  cursor: pointer;
+  text-align: left;
+}
+.os-hmm-section-toggle:hover { color: #0f172a; }
 
 .os-hmm-path {
   font-size: 11px;
@@ -1588,4 +1627,27 @@ body {
   letter-spacing: 0.05em;
   color: #92400e;
   margin: 0 0 2px;
+}
+
+/* Suggestion card — visually distinct from a saved contact card */
+.os-hmm-suggestion-card {
+  border: 1px dashed #c4b5fd;
+  background: #faf9ff;
+}
+
+/* AI-derived note block — evidence / missing info / follow-up questions / network insights */
+.os-hmm-ai-block {
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 4px;
+  padding: 7px 9px;
+  margin-top: 6px;
+}
+.os-hmm-ai-label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  margin: 0 0 3px;
 }
